@@ -1,0 +1,20 @@
+name: fmin-project
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.12
+  - notebook
+  - ipykernel
+  - pip
+  - pip:
+    - torch>=2.0
+    - numpy
+    - scipy
+    - matplotlib
+    - pandas
+    - torchvision
+    - nbconvert
+    - datasets
+    - transformers
+    - mlflow>=2.0

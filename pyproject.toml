@@ -1,0 +1,27 @@
+[project]
+name = "fmin-project"
+version = "0.1.0"
+description = "Experiments for 'Where do gradient methods really happen? Maybe not where we expected'"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "torch>=2.0",
+    "torchvision",
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "pandas",
+    "datasets",
+    "transformers",
+    "mlflow>=2.0",
+    "tqdm",
+    "notebook",
+    "ipykernel",
+    "nbconvert",
+    "cola-ml>=0.0.5",
+]
+
+# Research repo, not a library: don't try to build/install the project itself.
+# `uv sync` only manages the dependency env; `import src.*` works from repo root.
+[tool.uv]
+package = false

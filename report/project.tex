@@ -1,0 +1,194 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+% The preceding line is only needed to identify funding in the first footnote. If that is unneeded, please comment it out.
+%Template version as of 6/27/2024
+\usepackage[
+backend=biber,
+style=authoryear,
+natbib=true,
+maxbibnames=99,
+maxcitenames=1,
+mincitenames=1,
+url=false,
+doi=false,
+isbn=false,
+eprint=true
+]{biblatex}
+
+\DeclareSourcemap{
+  \maps[datatype=bibtex]{
+    \map{
+      \step[fieldsource=archiveprefix, match=\regexp{arXiv}]
+      \step[fieldset=eprinttype, fieldvalue={arxiv}]
+    }
+  }
+}
+
+\DeclareFieldFormat{eprint:arxiv}{arXiv preprint arXiv\addcolon\space #1}
+
+\addbibresource{refs.bib}
+
+\DeclareCiteCommand{\citet}
+  {}
+  {\printtext[bibhyperref]{%
+     \printnames{labelname}%
+     \setunit{\addspace}%
+     \printlabeldateextra}}
+  {\multicitedelim}
+  {}
+
+\DeclareCiteCommand{\citep}
+  {\bibopenparen}
+  {\printtext[bibhyperref]{%
+     \printnames{labelname}%
+     \setunit{\addspace}%
+     \printlabeldateextra}}
+  {\multicitedelim}
+  {\bibcloseparen}
+
+
+\usepackage[colorlinks,citecolor=blue,linkcolor=blue,bookmarks=false,hypertexnames=true, urlcolor=blue]{hyperref} 
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+\begin{document}
+
+\title{Where do Gradient Methods Really Happen? Maybe Not Where We Expected\\
+\thanks{*Equal contribution }
+}
+
+\author{\IEEEauthorblockN{Artur Babayan\textsuperscript{*}}
+\IEEEauthorblockA{\textit{HSE University} \\
+Moscow, Russia}
+\and
+\IEEEauthorblockN{Nikita Musalov\textsuperscript{*}}
+\IEEEauthorblockA{\textit{HSE University} \\
+Moscow, Russia}
+\and
+\IEEEauthorblockN{Maksim Kopnev\textsuperscript{*}}
+\IEEEauthorblockA{\textit{HSE University} \\
+Moscow, Russia}
+\and
+\IEEEauthorblockN{Aleksey Sivolotskiy\textsuperscript{*}}
+\IEEEauthorblockA{\textit{HSE University} \\
+Moscow, Russia}
+\and
+\IEEEauthorblockN{Sergey Samsonov}
+\IEEEauthorblockA{\textit{HSE University} \\
+Moscow, Russia}
+}
+
+\maketitle
+
+\begin{abstract}
+We study the paper \citet{SongDoesSGD}, which examines the hypothesis that neural network training takes place in low-dimensional subspaces. The authors show that the observed alignment of the gradient with a dominant subspace does not necessarily imply that the principal learning dynamics occur within that subspace.
+
+Within the scope of this project, we first plan to reproduce the main results of the paper for the toy model, MLP, CNN, and Transformer settings. We then intend to extend the study by considering alternative optimizers, other low-dimensional subspaces, and the effect of architectural properties of neural networks on the observed phenomenon.
+\end{abstract} 
+
+\section{Introduction}
+
+In modern deep learning, model parameter spaces are high-dimensional; however, recent studies show that effects associated with low-dimensional spaces are observed during training \citep{GurAriGD, SongDoesSGD, LiDLDR}. In the works \citep{GurAriGD, SongDoesSGD} the authors study a phenomenon in which, in a k-class classification problem, the gradient aligns with the dominant subspace after several training steps. The hypothesis that all learning takes place in this subspace was refuted in \citet{SongDoesSGD}. The problem of identifying a low-dimensional subspace in which training can be performed is also considered in other lines of work, which are discussed in more detail in the literature review.
+
+The goal of this work is to examine the gradient alignment phenomenon across a broader range of optimizers, such as Muon, forward-gradient methods, among others, as well as across different low-dimensional subspaces. In addition, we aim to provide a theoretical justification for some of the empirically obtained results.
+
+\section{Related work}
+
+The scientific landscape surrounding this topic naturally falls into several lines of work.
+
+The first and most closely related line consists of works on the Hessian spectrum and on the alignment of the gradient with its top eigenspace. Early studies \citep{sagun2017eigenvalueshessiandeeplearning, sagun2018empiricalanalysishessianoverparametrized, ghorbani2019},already showed that the Hessian spectrum in deep networks typically has a pronounced structure: a bulk concentrated near zero and a small number of outlier eigenvalues. Against this background, the work \citet{GurAriGD} formulated a strong hypothesis: after a short initial phase, the gradient aligns with a small subspace spanned by several top Hessian eigenvectors. A more recent theoretical work \citet{ArousHighDimensional} showed, using simplified high-dimensional mixture models, that a similar alignment can arise in a mathematically rigorous way. However, it was precisely the paper \citet{SongDoesSGD} that provided a fundamental counterexample to a direct interpretation of this observation: when projecting the update onto the dominant Hessian subspace, training stops; in some cases, the loss even starts to increase, while the bulk component of the update remains surprisingly effective.
+
+The latter paper provides the most important reference results for our project. First, it formalizes the dominant subspace as the span of the top-k Hessian eigenvectors, where the standard choice of k is the number of classes in the classification task. Second, it shows that for SGD in the gradient-flow regime, spurious alignment is caused primarily by stochastic noise, whereas for GD at the Edge of Stability, similar alignment is related to a self-stabilization mechanism. Third, in Appendix F, it demonstrates the same negative effect for SGDM and Adam. This led us to the next step: to determine to what extent this negative result depends on the choice of optimizer and on the way the subspace is defined.
+
+The second line of literature concerns the more general idea that neural network problems have low effective dimensionality. The simplest formulation appears in \citet{LiMeasuring}: the network is trained not in the full parameter space, but in a fixed random subspace, and the minimal sufficient dimension is used as a measure of task complexity. In parallel, a stronger empirical hypothesis was proposed in \citet{LiDLDR}, where the DLDR method was introduced and it was shown that some networks can be effectively trained in spaces with dimensions on the order of tens. These works clearly show that a negative result for one specific subspace does not close the topic of low-dimensional training as a whole.
+
+Several related papers also belong to this line of work. In NLP \citet{ZhangFineTuning} shows that fine-tuning pretrained language models can be interpreted through small task-specific subspaces. In few-shot learning, \citet{GauchFewShot} proposes SubGD, an approach based on the eigendecomposition of the autocorrelation matrix of update directions. These works clearly indicate that, as an alternative to the Hessian top-k subspace, one can consider subspaces constructed not from curvature, but from the statistics of gradients or updates themselves.
+
+\section{Problem}
+
+Let
+\[
+L(\theta) = \frac{1}{n}\sum_{i=1}^n l_i(\theta)
+\]
+be the empirical loss function, let $\theta_t$ denote the model parameters at step $t$, let $g_t$ be either a stochastic or full gradient, and let
+\[
+u_t = \mathcal{O}_t(g_t,s_t)
+\]
+be the "raw" update vector produced by the optimizer $\mathcal{O}$ with internal state $s_t$. For the Hessian
+\[
+H_t = \nabla^2 L(\theta_t)
+\]
+we denote by $S_{t,k}^H$ the subspace spanned by the top-k eigenvectors of $H_t$, and by $P_{t,k}^H$ the orthogonal projector onto this subspace. This is precisely the dominant subspace in the sense of the original paper.
+
+Similarly, we introduce alternative families of subspaces: $S_{t,k}^C$ is the top-k eigenspace of the gradient covariance matrix $C_t$, $S_{t,k}^R$ is a random k-dimensional subspace, and
+\[
+S_{t,k}^S = \operatorname{span}(Q_t)
+\]
+is a learnable subspace defined by an orthonormal basis $Q_t \in \operatorname{St}(k,p)$ on the Stiefel manifold.
+
+For each family of subspaces $U$ and each optimizer $\mathcal{O}$, we consider three trajectories:
+\[
+\theta_{t+1}^{\text{full}} = \theta_t - \eta_t u_t, \quad \theta_{t+1}^{U} = \theta_t - \eta_t P_{U_t}u_t,, \quad \theta_{t+1}^{{U^\bot}} = \theta_t - \eta_t (I-P_{U_t})u_t,
+\]
+
+The central goal of the project is to compare how well the trajectory $\theta^U$ reproduces the loss reduction and generalization performance of the baseline trajectory $\theta^{\text{full}}$, and how informative the observed high projection of the gradient onto $U_t$ actually is. In this form, the research question becomes precise: for which choices of $(\mathcal{O}, U)$ is the observed alignment causally useful, meaning that projected training preserves a substantial fraction of the useful loss decrease. and for which choices is it not?
+
+\section{Quality metrics}
+
+In this paper, we plan to investigate the behavior of optimizers by projecting their updates onto low-dimensional subspaces, which naturally leads to the following metrics:
+
+\textbf{Alignment}
+\[
+\chi_S(v) = \frac{\|P_S v\|}{\|v\|}
+\]
+This metric shows what proportion of the vector lies within the selected subspace.
+
+\textbf{Loss/Accuracy} 
+
+As task-level metrics, we report training loss, validation loss, and accuracy. These metrics are used to test whether high alignment with a subspace corresponds to actual learning progress, since a subspace may explain most of the gradient norm while still failing to decrease the loss or improve predictive quality.
+
+\section{Plan}
+
+\begin{enumerate}
+    \item Preparing  and Reproducing the paper \citet{SongDoesSGD}
+
+    \begin{enumerate}
+        \item MLP experiments
+        \item CNN experiments
+        \item Transformer experiments
+        \item Toy model
+    \end{enumerate}
+    \item In this same context, consider other optimizers
+    \begin{enumerate}
+        \item Muon
+        \item Adaptive methods (e.g. AdamW, Adafactor)
+        \item Forward-gradient methods 
+        \item Zero-order methods (e.g. two-point, MeZO)
+    \end{enumerate}
+    \item Consider other low-dimensional subspaces
+    \item Test the effect on GPT-like model, such as NanoGPT
+    \item Provide a theoretical explanation for the original article and the subsequent observed effects
+\end{enumerate}
+
+\section{Outcomes}
+
+\begin{enumerate}
+    \item Open JAX/PyTorch implementation of all conducted experiments
+    \item A set of reproducible plots
+    \item New experiments
+    \begin{enumerate}
+        \item Other optimizers will be considered
+        \item Projections will be performed onto other low-dimensional subspaces
+        \item The experiment will be conducted for a language model
+    \end{enumerate}
+    \item A theoretical explanation of the observed effects
+\end{enumerate}
+
+\section*{}
+% \newpage 
+\printbibliography
+
+\end{document}
