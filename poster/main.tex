@@ -1,0 +1,127 @@
+% !TeX program = lualatex
+\documentclass[final]{beamer}
+
+\input{styles}
+
+\title{Where do Gradient Methods Really Happen? Maybe Not Where We Expected}
+\author{Artur Babayan\textsuperscript{*} \and Nikita Musalov\textsuperscript{*} \and Maksim Kopnev\textsuperscript{*} \and Aleksey Sivolotskiy\textsuperscript{*}\and Sergey Samsonov}
+\institute{HSE University, Moscow, Russia}
+\date{\textsuperscript{*}Equal contribution}
+
+\begin{document}
+
+\begin{frame}[t]
+\posterheader
+
+\begin{columns}[t,totalwidth=\textwidth]
+  \begin{postercol}
+    \begin{posterblock}{Intro}
+      Modern neural networks are trained in extremely high-dimensional parameter spaces, yet their dynamics often look partly low-dimensional. Recent work observes that gradients may quickly align with a dominant Hessian subspace after only a few training steps.
+
+      Our draft revisits this observation: strong alignment with a dominant subspace does not necessarily mean that useful learning actually happens inside it.
+
+      The goal is to separate descriptive geometry from causal optimization mechanisms across architectures, optimizers, and alternative choices of training subspaces.
+    \end{posterblock}
+
+    \vfill
+
+    \begin{posterblock}{Problem}
+      Let \(u_t\) be the update produced by an optimizer from the current gradient and optimizer state. For a subspace \(U_t\), we decompose this update into projected and complementary parts:
+      \[
+        u_t=P_{U_t}u_t+(I-P_{U_t})u_t .
+      \]
+
+      We compare three trajectories from the same initialization: full updates, updates restricted to \(U_t\), and updates restricted to the orthogonal complement.
+
+      The central question is causal: does a high-alignment subspace preserve loss decrease and validation quality, or does the complementary ``bulk'' still carry the useful progress?
+    \end{posterblock}
+
+    \vfill
+
+    \begin{highlightblock}{Projectors}
+      The poster will compare several ways to choose \(U_t\):
+      \begin{itemize}
+        \item top Hessian eigenspaces, following the dominant-subspace hypothesis;
+        \item gradient covariance subspaces and random baselines;
+        \item optimizer-induced subspaces from momentum or adaptive learning rates;
+        \item learnable orthonormal bases on the Stiefel manifold.
+      \end{itemize}
+
+      In the current implementation, the main working projectors are top-\(k\) Hessian eigenspaces and random subspaces, with a learnable projector smoke test already indicating that non-Hessian subspaces can be meaningful.
+    \end{highlightblock}
+  \end{postercol}
+
+  \begin{postercol}
+    \begin{posterblock}{Optimizers}
+      We treat the optimizer as part of the geometry, not as a detail outside the projection experiment. The update \(u_t\) may include momentum, adaptive scaling, matrix normalization, or finite-difference estimates.
+
+      The experimental code is organized around a shared runner for:
+      \begin{itemize}
+        \item SGD and SGD with momentum;
+        \item Adam and AdamW;
+        \item Muon and related matrix-aware updates;
+        \item forward-gradient and zeroth-order methods such as MeZO/SubZero.
+      \end{itemize}
+
+      This lets us test whether the dominant-subspace failure is specific to SGD-like training or persists under richer optimizer-induced geometries.
+    \end{posterblock}
+
+    \vfill
+
+    \begin{highlightblock}{Metrics}
+      We measure subspace alignment by
+      \[
+        \chi_U(v)=\frac{\lVert P_U v\rVert}{\lVert v\rVert}.
+      \]
+
+      Following the reference setup, an exponential moving average of alignment can be used as a switching criterion; however, the draft emphasizes that alignment alone is not enough.
+
+      We therefore track training loss, validation loss, accuracy, update norms, and a projected descent ratio: how much predicted one-step loss decrease remains after projection.
+
+      These metrics distinguish geometric overlap from actual optimization and generalization behavior.
+    \end{highlightblock}
+  \end{postercol}
+
+  \begin{postercol}
+    \begin{posterblock}{Experiments}
+      The current draft contains a unified experiment framework and initial replications on:
+      \begin{itemize}
+        \item toy binary classification;
+        \item MLP on MNIST-5k and CNN on CIFAR10-5k;
+        \item a small Transformer on SST2-1k;
+        \item additional architectures such as VGG11 and ResNet8.
+      \end{itemize}
+
+      Preliminary results reproduce the key phenomenon: top Hessian projection can stop or degrade training, while the complementary subspace may continue reducing loss.
+
+      Early Muon and momentum-induced subspace experiments suggest that optimizer-specific subspaces may behave differently and may be relevant for validation behavior, not only training loss.
+    \end{posterblock}
+
+    \vfill
+
+    \begin{highlightblock}{Conclusions}
+      The working conclusion is that dominant Hessian alignment is not a sufficient explanation of learning dynamics.
+
+      A simple low-rank quadratic view already explains why projection onto sharp dominant directions may stop once those coordinates are optimized, even when the full gradient is not zero.
+
+      The final version will compare optimizer-projector pairs and identify when useful progress lives in dominant, bulk, random, learned, or optimizer-induced subspaces.
+    \end{highlightblock}
+
+    \vfill
+
+    \begin{accentblock}
+      \textbf{Main message.} Low-dimensional structure is real, but the useful learning signal may live outside the dominant Hessian subspace. Alignment must be tested against projected training quality.
+    \end{accentblock}
+
+    \vfill
+
+    \begin{referencesblock}
+      \nocite{*}
+      \printbibliography[heading=none]
+    \end{referencesblock}
+  \end{postercol}
+\end{columns}
+
+\end{frame}
+
+\end{document}

@@ -1,0 +1,221 @@
+\usepackage[size=custom,width=122,height=91,scale=1.32]{beamerposter}
+\usepackage{fontspec}
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{ragged2e}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage[most]{tcolorbox}
+\usepackage{multicol}
+\usepackage{hyperref}
+\usepackage[
+  backend=biber,
+  style=numeric,
+  sorting=none,
+  giveninits=true,
+  maxbibnames=1,
+  minbibnames=1,
+  url=false,
+  doi=false,
+  isbn=false,
+  eprint=true
+]{biblatex}
+
+\addbibresource{refs.bib}
+
+\graphicspath{{img/}}
+
+\setmainfont[
+  Path = ../fonts/,
+  Extension = .otf,
+  UprightFont = *-Regular,
+  BoldFont = *-Bold,
+  ItalicFont = *-Italic,
+  BoldItalicFont = *-Italic
+]{HSESans}
+\setsansfont[
+  Path = ../fonts/,
+  Extension = .otf,
+  UprightFont = *-Regular,
+  BoldFont = *-Bold,
+  ItalicFont = *-Italic,
+  BoldItalicFont = *-Italic
+]{HSESans}
+
+\definecolor{HSEblue}{cmyk}{1,0.8,0,0.4}
+\definecolor{HSElightblue}{cmyk}{0.95,0.75,0,0}
+\definecolor{HSEgreen}{cmyk}{0.8,0.1,0.75,0}
+\definecolor{HSEred}{cmyk}{0.2,1,0.6,0.05}
+\definecolor{HSEorange}{cmyk}{0,0.7,1,0}
+\definecolor{HSEink}{HTML}{151A2D}
+\definecolor{HSEpaper}{HTML}{FFFFFF}
+\definecolor{HSEline}{HTML}{D9E0EE}
+\definecolor{HSEsoftblue}{HTML}{EEF4FF}
+\definecolor{HSEsoftorange}{HTML}{FFF3EA}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=HSEblue,
+  urlcolor=HSEblue,
+  citecolor=HSEorange
+}
+
+\usetheme{default}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{headline}{}
+\setbeamercolor{background canvas}{bg=HSEpaper}
+\setbeamercolor{normal text}{fg=HSEink}
+\setbeamerfont{normal text}{size=\normalsize}
+\setbeamersize{text margin left=2.2cm,text margin right=2.2cm}
+
+\setbeamertemplate{footline}{%
+  \begin{beamercolorbox}[wd=\paperwidth,ht=1.25cm,dp=0.45cm,center]{poster footer}
+    {\color{white}\bfseries\fontsize{29}{34}\selectfont Poster Session \quad|\quad HSE University \quad|\quad GitHub: link}
+  \end{beamercolorbox}
+}
+
+\setlength{\paperwidth}{122cm}
+\setlength{\paperheight}{91cm}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.28em}
+
+\newlength{\columnsepwidth}
+\newlength{\colwidth}
+\newlength{\posterbodyheight}
+\setlength{\columnsepwidth}{0.025\textwidth}
+\setlength{\colwidth}{0.315\textwidth}
+\setlength{\posterbodyheight}{64.5cm}
+\setlength{\columnsep}{\columnsepwidth}
+
+\newenvironment{postercol}
+  {\begin{column}{\colwidth}\begin{minipage}[t][\posterbodyheight][t]{\linewidth}}
+  {\end{minipage}\end{column}}
+
+\newcommand{\posterheader}{%
+  \begin{beamercolorbox}[wd=\paperwidth,sep=0cm,leftskip=2.2cm,rightskip=2.2cm]{poster header}
+  \vbox to 10.9cm{%
+    \vfil
+    \begin{columns}[c,totalwidth=\dimexpr\paperwidth-4.4cm\relax]
+      \begin{column}{0.16\paperwidth}
+        \centering
+        \includegraphics[height=8.2cm,keepaspectratio]{logo.png}
+      \end{column}
+      \begin{column}{0.68\paperwidth}
+        \centering
+        {\color{white}\bfseries\fontsize{55}{62}\selectfont\inserttitle\par}
+        \vspace{1.0cm}
+        {\color{white}\fontsize{30}{36}\selectfont\insertauthor\par}
+        \vspace{1.0cm}
+        {\color{white}\fontsize{23}{28}\selectfont\insertinstitute\par}
+      \end{column}
+      \begin{column}{0.12\paperwidth}
+        \begin{minipage}[c][8.2cm][b]{\linewidth}
+          \raggedleft
+          {\color{white}\fontsize{20}{25}\selectfont\insertdate\par}
+        \end{minipage}
+      \end{column}
+    \end{columns}
+    \vfil
+  }%
+  \end{beamercolorbox}
+  \nointerlineskip
+  \begin{beamercolorbox}[wd=\paperwidth,ht=0.35cm,dp=0cm]{poster stripe}\end{beamercolorbox}
+  \vspace{0.7cm}
+}
+
+\newenvironment{posterblock}[1]
+  {%
+    \par\noindent
+    {\centering\color{HSEblue}\bfseries\fontsize{36}{42}\selectfont #1\par}
+    \vspace{0.32cm}
+    {\color{HSEink}\hrule height 0.08cm}
+    \vspace{0.55cm}
+    \justifying
+    \fontsize{30}{37}\selectfont
+  }
+  {%
+    \par
+  }
+
+\newenvironment{highlightblock}[1]
+  {%
+    \begin{tcolorbox}[
+      enhanced,
+      width=\linewidth,
+      colback=HSEsoftorange,
+      colframe=HSEsoftorange,
+      boxrule=0pt,
+      arc=3mm,
+      left=0.9cm,
+      right=0.9cm,
+      top=0.65cm,
+      bottom=0.75cm
+    ]
+    {\centering\color{HSEblue}\bfseries\fontsize{36}{42}\selectfont #1\par}
+    \vspace{0.32cm}
+    {\color{HSEink}\hrule height 0.08cm}
+    \vspace{0.55cm}
+    \color{HSEink}\fontsize{30}{37}\selectfont\justifying
+  }
+  {%
+    \end{tcolorbox}
+  }
+
+\newenvironment{accentblock}
+  {%
+    \begin{tcolorbox}[
+      enhanced,
+      width=\linewidth,
+      colback=HSEblue,
+      colframe=HSEblue,
+      boxrule=0pt,
+      arc=3mm,
+      left=0.9cm,
+      right=0.9cm,
+      top=0.75cm,
+      bottom=0.85cm
+    ]
+    \color{white}\fontsize{30}{37}\selectfont\justifying
+  }
+  {\end{tcolorbox}}
+
+\newenvironment{referencesblock}
+  {%
+    \par\noindent
+    {\centering\color{HSEblue}\bfseries\fontsize{39}{42}\selectfont References\par}
+    \vspace{0.32cm}
+    {\color{HSEink}\hrule height 0.08cm}
+    \vspace{0.35cm}
+    \fontsize{11.5}{13.8}\selectfont
+    \setlength{\columnsep}{0.45cm}
+    \begin{multicols}{2}
+  }
+  {%
+    \end{multicols}
+    \par
+  }
+
+\setbeamercolor{block body}{fg=HSEink,bg=white}
+\setbeamercolor{poster header}{fg=white,bg=HSEblue}
+\setbeamercolor{poster footer}{fg=white,bg=HSEblue}
+\setbeamercolor{poster stripe}{bg=HSEorange}
+\setbeamercolor{highlight body}{fg=HSEink,bg=HSEsoftorange}
+\setbeamercolor{accent body}{fg=white,bg=HSEblue}
+\setbeamertemplate{bibliography item}{\insertbiblabel}
+\renewcommand*{\bibfont}{\fontsize{18.5}{15.8}\selectfont}
+\setlength\bibitemsep{0.3em}
+\setlength{\biblabelsep}{0.2em}   % расстояние между [1] и текстом
+\setlength{\bibhang}{1.2em}  
+
+\setlist[itemize]{
+  label=\textcolor{HSEorange}{\textbullet},
+  leftmargin=1.2em,
+  itemsep=0.08em,
+  topsep=0.08em
+}
+
+\AtBeginDocument{%
+  \everymath{\displaystyle}%
+}
