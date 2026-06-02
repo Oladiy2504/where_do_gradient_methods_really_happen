@@ -1,0 +1,87 @@
+{
+  "experiment_name": "momentum_cifar_adam_expavg_layerwise_tangent_energy080_switch_1000_end_4000_upd1_5seeds",
+  "experiment_title": "Adam exp_avg layerwise momentum tangent CIFAR (energy 80%) sanity-check",
+  "device": "cpu",
+  "seeds": [
+    42,
+    67,
+    112
+  ],
+  "run_plan_kwargs": {
+    "task_name": "cifar10_cnn3",
+    "mode": "adam",
+    "projection_mode": "momentum_svd",
+    "steps_override": 3000,
+    "log_every": 20,
+    "update_every_steps": 1,
+    "basis_subsample": null,
+    "switch_on_step": 1000,
+    "projector_solver": "auto",
+    "projector_maxiter": 40,
+    "show_progress": true,
+    "momentum_projection_type": "tangent",
+    "momentum_state_key": "exp_avg",
+    "momentum_svd_scope": "layerwise",
+    "momentum_rank_mode": "energy",
+    "momentum_rank_frac": 0.8,
+    "momentum_max_rank": null
+  },
+  "runner_overrides": {
+    "keep_models": false,
+    "fail_fast": true,
+    "chi_k_full_batch_every": null
+  },
+  "plot_specs": [
+    [
+      "loss",
+      "Train loss"
+    ],
+    [
+      "accuracy",
+      "Train batch accuracy"
+    ],
+    [
+      "chi_k_grad",
+      "Gradient alignment with dom subspace"
+    ],
+    [
+      "chi_k_grad_ema",
+      "EMA gradient alignment"
+    ],
+    [
+      "subspace_usefulness/rho",
+      "Subspace usefulness ratio"
+    ],
+    [
+      "projector/subspace_pct",
+      "Projection subspace size (% of parameters)"
+    ],
+    [
+      "validation/loss",
+      "Validation loss"
+    ],
+    [
+      "validation/accuracy",
+      "Validation accuracy"
+    ]
+  ],
+  "validation": {
+    "dataset": "CIFAR10",
+    "split": "test",
+    "batch_size": 256,
+    "normalization": {
+      "mean": [
+        0.4914,
+        0.4822,
+        0.4465
+      ],
+      "std": [
+        0.247,
+        0.2435,
+        0.2616
+      ]
+    },
+    "logged_every_training": true,
+    "logged_on_runner_log_steps": true
+  }
+}

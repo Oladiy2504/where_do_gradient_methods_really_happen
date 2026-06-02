@@ -1,10 +1,15 @@
-"""
-Forward Gradient Descent (FGD)
+"""Forward Gradient Descent (FGD) with optional subspace projection.
 
-Источник:
+Reference:
     Baydin, Pearlmutter, Syme, Wood, Torr.
     "Gradients without Backpropagation." arXiv:2202.08587 (2022).
     https://github.com/orobix/fwdgrad
+
+Each step samples a tangent ``v ~ N(0, I)``, evaluates the directional
+derivative ``d = grad f(theta) . v`` exactly via ``torch.func.jvp`` and uses
+``g = d * v`` as an unbiased estimator of ``grad f(theta)``. When a projector
+is supplied, ``g`` is projected onto the requested ``dom`` or ``bulk``
+subspace before the update is applied.
 """
 
 from __future__ import annotations
@@ -25,6 +30,14 @@ Closure = Callable[[Tuple[torch.Tensor, ...]], torch.Tensor]
 
 
 class ForwardGradient(Optimizer):
+    """SGD with forward-mode AD instead of backpropagation.
+
+    Args:
+        params: iterable of parameters or parameter groups.
+        lr: learning rate.
+        weight_decay: decoupled L2 regularization coefficient.
+    """
+
     def __init__(
         self,
         params: Iterable[torch.nn.Parameter],
@@ -57,6 +70,11 @@ class ForwardGradient(Optimizer):
         projector: BaseProjector | None = None,
         projection: ProjectionMode = "none",
     ) -> torch.Tensor:
+        """Run one FGD step.
+
+        ``closure`` must accept a tuple of parameter tensors (in the order
+        yielded by ``self.param_groups``) and return a scalar loss tensor.
+        """
         if closure is None:
             raise ValueError(
                 "ForwardGradient requires a closure that maps a tuple of "
@@ -68,9 +86,7 @@ class ForwardGradient(Optimizer):
         all_params = self._all_params()
         primals = tuple(p.detach() for p in all_params)
         tangents = tuple(
-            torch.randn(
-                p.shape, device=p.device, dtype=p.dtype, generator=self._generator
-            )
+            torch.randn(p.shape, device=p.device, dtype=p.dtype, generator=self._generator)
             if p.requires_grad
             else torch.zeros_like(p)
             for p in all_params
@@ -105,6 +121,7 @@ class ForwardGradient(Optimizer):
                 idx += 1
                 if not p.requires_grad:
                     continue
+                # Decoupled weight decay sits outside the projection.
                 if wd != 0.0:
                     p.data.mul_(1.0 - lr * wd)
                 p.data.add_(u, alpha=-lr)

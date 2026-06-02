@@ -1,8 +1,16 @@
-"""
-Версия ExperimentRunner с поддержкой логирования MLflow
+"""MLflow-aware subclass of ExperimentRunner.
 
-Каждая комбинация task + optimizer + projector + projection запускается
-как отдельный MLflow run
+Each (task, optimizer, projector, projection) tuple is mapped to one MLflow
+run inside the user-provided experiment. Params are logged once at run start;
+metrics are streamed at every log-step from `_make_log_row`; the model
+state_dict with the lowest train loss seen so far is uploaded as an artifact
+under `best_ckpt/`.
+
+This subclass intentionally owns no training-loop code: it plugs into the
+canonical loop in `ExperimentRunner._run_one` via the observer hooks
+(`_on_run_start`, `_on_log_row`, `_on_run_finished`, `_on_run_failed`).
+Future fixes to the training loop (e.g. full-batch chi_k from Song et al.
+Section 3.2) therefore reach MLflow runs automatically.
 """
 
 from __future__ import annotations
@@ -27,33 +35,44 @@ from src.experiments.runner import (
 _METRIC_KEYS = (
     "loss",
     "accuracy",
-    "chi_k_grad",
-    "chi_k_grad_ema",
+    "chi_k",
+    "chi_k_ema",
     "update/raw_update_norm",
     "update/projected_update_norm",
     "update/alignment",
+    "subspace_usefulness/rho",
     "epoch_time_sec",
     "epoch_time_sec_avg",
 )
 
 
 def _to_param_value(v: Any) -> str:
+    """MLflow params must be primitive-ish. We stringify dicts/lists."""
     if isinstance(v, (str, int, float, bool)) or v is None:
         return v if isinstance(v, str) else str(v)
     return str(v)
 
 
 class MLflowLoggingRunner(ExperimentRunner):
+    """Same as ExperimentRunner, but streams everything into MLflow.
+
+    Overrides the four observer hooks added to `ExperimentRunner` so the
+    training loop itself is untouched. Per-run state (`_best_loss`,
+    `_best_path`, `_tmp_dir`) is initialised in `_on_run_start` because one
+    runner instance executes the full plan and each `_run_one` call needs
+    a fresh checkpoint scratch space.
+    """
+
     @contextlib.contextmanager
     def _on_run_start(
-        self,
-        *,
-        run_name: str,
-        opt_spec: OptimizerSpec,
-        proj_spec: ProjectorSpec | None,
-        projection: ProjectionMode,
-        seed: int,
-        resume_from: SwitchCheckpoint | None = None,
+            self,
+            *,
+            run_name: str,
+            opt_spec: OptimizerSpec,
+            proj_spec: ProjectorSpec | None,
+            projection: ProjectionMode,
+            seed: int,
+            resume_from: SwitchCheckpoint | None = None,
     ) -> Iterator[None]:
         projector_name = "none" if proj_spec is None else proj_spec.name
         params_to_log: dict[str, Any] = {
@@ -109,12 +128,12 @@ class MLflowLoggingRunner(ExperimentRunner):
         return ckpt
 
     def _on_log_row(
-        self,
-        row: dict[str, Any],
-        *,
-        step: int,
-        loss_value: float,
-        model: torch.nn.Module,
+            self,
+            row: dict[str, Any],
+            *,
+            step: int,
+            loss_value: float,
+            model: torch.nn.Module,
     ) -> None:
         metrics: dict[str, float] = {}
         for key in _METRIC_KEYS:
@@ -133,11 +152,11 @@ class MLflowLoggingRunner(ExperimentRunner):
             )
 
     def _on_run_finished(
-        self,
-        *,
-        run_name: str,
-        history: list[dict[str, Any]],
-        model: torch.nn.Module,
+            self,
+            *,
+            run_name: str,
+            history: list[dict[str, Any]],
+            model: torch.nn.Module,
     ) -> None:
         del run_name, model
         if self._best_path is not None and self._best_path.exists():

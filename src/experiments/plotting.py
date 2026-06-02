@@ -12,12 +12,14 @@ _REQUIRED_COLUMNS = {"optimizer", "projector", "projection", "step"}
 
 
 def make_run_label(projector: str, projection: str) -> str:
+    """Return a compact label for one run inside a fixed optimizer panel."""
     if projector == "none" and projection == "none":
         return "baseline"
     return f"{projector}:{projection}"
 
 
 def run_label_sort_key(label: str) -> tuple[int, int, str]:
+    """Sort labels as baseline -> random -> hessian -> other, and dom before bulk."""
     lower = label.lower()
 
     if label == "baseline":
@@ -73,6 +75,15 @@ def plot_metric_by_optimizer(
     legend: bool = True,
     save_path: str | Path | None = None,
 ):
+    """Plot one metric in separate subplots for each optimizer.
+
+    Expected columns in ``df``:
+        optimizer, projector, projection, step, <metric>
+
+    Each subplot corresponds to one optimizer. Lines inside a subplot correspond
+    to baseline / random-dom / random-bulk / hessian-dom / hessian-bulk and any
+    other available run labels.
+    """
     if max_cols <= 0:
         raise ValueError("max_cols must be positive.")
 
@@ -149,6 +160,7 @@ def plot_loss_and_accuracy_by_optimizer(
     max_cols: int = 3,
     save_dir: str | Path | None = None,
 ):
+    """Create two figures: loss-by-optimizer and accuracy-by-optimizer."""
     save_dir_path = None if save_dir is None else Path(save_dir)
 
     loss_fig, loss_axes = plot_metric_by_optimizer(
@@ -158,9 +170,7 @@ def plot_loss_and_accuracy_by_optimizer(
         ylabel="loss",
         optimizers=optimizers,
         max_cols=max_cols,
-        save_path=None
-        if save_dir_path is None
-        else save_dir_path / "loss_by_optimizer.png",
+        save_path=None if save_dir_path is None else save_dir_path / "loss_by_optimizer.png",
     )
 
     acc_fig = acc_axes = None
@@ -172,12 +182,24 @@ def plot_loss_and_accuracy_by_optimizer(
             ylabel="accuracy",
             optimizers=optimizers,
             max_cols=max_cols,
-            save_path=None
-            if save_dir_path is None
-            else save_dir_path / "accuracy_by_optimizer.png",
+            save_path=None if save_dir_path is None else save_dir_path / "accuracy_by_optimizer.png",
+        )
+
+    rho_metric = "subspace_usefulness/rho"
+    rho_fig = rho_axes = None
+    if rho_metric in df.columns:
+        rho_fig, rho_axes = plot_metric_by_optimizer(
+            df,
+            metric=rho_metric,
+            title="Subspace usefulness by optimizer",
+            ylabel="rho_S",
+            optimizers=optimizers,
+            max_cols=max_cols,
+            save_path=None if save_dir_path is None else save_dir_path / "subspace_usefulness_rho_by_optimizer.png",
         )
 
     return {
         "loss": (loss_fig, loss_axes),
         "accuracy": None if acc_fig is None else (acc_fig, acc_axes),
+        rho_metric: None if rho_fig is None else (rho_fig, rho_axes),
     }

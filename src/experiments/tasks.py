@@ -1,7 +1,7 @@
 """
 Тут собраны функции для сбора TaskSpec для раннера.
 
-Тут описана предметная логика (datasets, models, loss, ...)
+Тут описана предметную логика (datasets, models, loss, ...).
 
 В основном цикле обучения отсюда нужны лишь make_..._task функции
 """
@@ -15,19 +15,25 @@ import torch
 import torch.nn.functional as F
 
 from src.experiments.runner import Batch, MetricsFn, TaskSpec
-from src.models.data import get_cifar10, get_mnist, get_sst2
+from src.models.data import get_cifar10, get_fineweb, get_mnist, get_sst2
 from src.models.cnn_cifar import CNN3CIFAR
+from src.models.gpt import GPT
 from src.models.mlp_mnist import MLP3MNIST
 from src.models.resnet_cifar import ResNet8CIFAR
 from src.models.transformer_sst import TransformerSST2
 from src.models.vgg11_cifar import VGG11CIFAR
 
+# forward_fn(model_like, batch) -> logits
 ForwardFn = Callable[[Any, Batch], torch.Tensor]
 
+# target_fn(batch) -> y
 TargetFn = Callable[[Batch], torch.Tensor]
 
 
 def batch_to_device(batch: Batch, device: torch.device, dtype: torch.dtype | None) -> Batch:
+    """
+    Move a nested batch to device. Floating tensors are optionally cast.
+    """
     if torch.is_tensor(batch):
         if dtype is not None and batch.is_floating_point():
             return batch.to(device=device, dtype=dtype)
@@ -65,6 +71,47 @@ def sst2_forward(model_like: Any, batch: Batch) -> torch.Tensor:
     return model_like(input_ids, attention_mask)
 
 
+def lm_forward(model_like: Any, batch: Batch) -> torch.Tensor:
+    """
+    Forward для causal LM: возвращает logits [B, T, vocab].
+    batch = (input_ids, target_ids).
+    """
+    return model_like(batch[0])
+
+
+def lm_loss_fn(model_like: Any, batch: Batch) -> torch.Tensor:
+    """
+    Next-token cross-entropy для causal LM.
+    """
+    logits = lm_forward(model_like, batch)            # [B, T, V]
+    targets = batch[1]                                # [B, T]
+    return F.cross_entropy(
+        logits.reshape(-1, logits.size(-1)).float(),
+        targets.reshape(-1),
+    )
+
+
+def make_lm_metric(forward_fn: ForwardFn = lm_forward) -> MetricsFn:
+    """
+    Token-accuracy + perplexity для causal LM.
+    """
+    def metrics_fn(model: torch.nn.Module, batch: Batch) -> dict[str, float]:
+        logits = forward_fn(model, batch)             # [B, T, V]
+        targets = batch[1]                            # [B, T]
+        ce = F.cross_entropy(
+            logits.reshape(-1, logits.size(-1)).float(),
+            targets.reshape(-1),
+        )
+        pred = logits.argmax(dim=-1)
+        acc = (pred == targets).float().mean()
+        return {
+            "accuracy": float(acc.detach().cpu()),
+            "perplexity": float(torch.exp(ce).detach().cpu()),
+        }
+
+    return metrics_fn
+
+
 def make_classification_loss(forward_fn: ForwardFn, target_fn: TargetFn = tuple_target, 
                              loss_type: Literal["ce", "mse"] = "ce", num_classes: int | None = None) -> Callable[[Any, Batch], torch.Tensor]:
     """
@@ -82,7 +129,11 @@ def make_classification_loss(forward_fn: ForwardFn, target_fn: TargetFn = tuple_
         if loss_type == "mse":
             if num_classes is None:
                 raise ValueError("num_classes must be specified for categorical MSE.")
-            y_onehot = F.one_hot(y, num_classes=num_classes).float()
+            # y_onehot = F.one_hot(y, num_classes=num_classes).float()
+            # Изменил чтобы работал vmap
+            classes = torch.arange(num_classes, device=y.device)
+            y_onehot = (y.unsqueeze(-1) == classes).to(dtype=logits.dtype)
+            # Sum over class dim, mean over batch (Hui & Belkin / Cohen et al.).
             return F.mse_loss(logits.float(), y_onehot, reduction="sum") / y.shape[0]
 
         raise ValueError(f"Unknown loss_type: {loss_type}")
@@ -91,6 +142,12 @@ def make_classification_loss(forward_fn: ForwardFn, target_fn: TargetFn = tuple_
 
 
 def make_accuracy_metric(forward_fn: ForwardFn, target_fn: TargetFn = tuple_target) -> MetricsFn:
+    """
+    Factory для accuracy
+
+    На инференсе:
+    metrics = TaskSpec.metrics_fn(model, batch)
+    """
     def metrics_fn(model: torch.nn.Module, batch: Batch) -> dict[str, float]:
         logits = forward_fn(model, batch)
         y = target_fn(batch)
@@ -277,5 +334,51 @@ def make_sst2_transformer_task(batch_size: int = 50, max_len: int = 64, num_work
             forward_fn=sst2_forward,
             target_fn=tuple_target,
         ),
+        batch_to_device=batch_to_device,
+    )
+
+
+def make_fineweb_gpt_task(
+    seq_len: int = 256,
+    train_batch_tokens: int = 16384,
+    num_shards: int = 1,
+    num_workers: int = 0,
+    vocab_size: int = 1024,
+    num_layers: int = 2,
+    model_dim: int = 128,
+    num_heads: int = 4,
+    num_kv_heads: int = 2,
+    mlp_mult: int = 2,
+) -> TaskSpec:
+    """
+    Собирает FineWeb (sp1024) + GPT-бейзлайн (openai/parameter-golf).
+
+    Causal LM: loss_fn = next-token cross-entropy. Токен-бюджет
+    train_batch_tokens сворачивается в batch_size = train_batch_tokens // seq_len
+    внутри get_fineweb. num_shards=1 по умолчанию (до 8 — просто увеличить).
+    """
+    loader, vocab = get_fineweb(
+        seq_len=seq_len,
+        train_batch_tokens=train_batch_tokens,
+        num_shards=num_shards,
+        num_workers=num_workers,
+    )
+
+    model_factory = partial(
+        GPT,
+        vocab_size=vocab_size,
+        num_layers=num_layers,
+        model_dim=model_dim,
+        num_heads=num_heads,
+        num_kv_heads=num_kv_heads,
+        mlp_mult=mlp_mult,
+    )
+
+    return TaskSpec(
+        name="fineweb_gpt",
+        model_factory=model_factory,
+        train_loader=loader,
+        loss_fn=lm_loss_fn,
+        metrics_fn=make_lm_metric(),
         batch_to_device=batch_to_device,
     )

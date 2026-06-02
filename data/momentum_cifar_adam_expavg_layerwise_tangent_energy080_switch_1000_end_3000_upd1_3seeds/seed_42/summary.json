@@ -1,0 +1,29 @@
+[
+  {
+    "run_name": "cifar10_cnn3__adam__none__none",
+    "optimizer": "adam",
+    "projector": "none",
+    "projection": "none",
+    "status": "ok",
+    "final_loss": 0.36376821994781494,
+    "error": null
+  },
+  {
+    "run_name": "cifar10_cnn3__adam__momentum_svd_layerwise_tangent__dom",
+    "optimizer": "adam",
+    "projector": "momentum_svd_layerwise_tangent",
+    "projection": "dom",
+    "status": "ok",
+    "final_loss": 0.41858584731817244,
+    "error": null
+  },
+  {
+    "run_name": "cifar10_cnn3__adam__momentum_svd_layerwise_tangent__bulk",
+    "optimizer": "adam",
+    "projector": "momentum_svd_layerwise_tangent",
+    "projection": "bulk",
+    "status": "ok",
+    "final_loss": 0.32603645473718645,
+    "error": null
+  }
+]
