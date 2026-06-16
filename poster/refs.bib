@@ -6,39 +6,27 @@
 }
 
 @misc{GurAriGD,
-      title={Gradient Descent Happens in a Tiny Subspace}, 
+      title={Gradient Descent Happens in a Tiny Subspace},
       author={Guy Gur-Ari and Daniel A. Roberts and Ethan Dyer},
       year={2018},
-      eprint={1812.04754},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG},
 }
 
-@misc{LiDLDR2021,
-      title={Low Dimensional Landscape Hypothesis is True: DNNs can be Trained in Tiny Subspaces}, 
+@misc{LiDLDR,
+      title={Low Dimensional Landscape Hypothesis is True: DNNs can be Trained in Tiny Subspaces},
       author={Tao Li and Lei Tan and Qinghua Tao and Yipeng Liu and Xiaolin Huang},
       year={2021},
-      eprint={2103.11154},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG}, 
 }
 
 @misc{sagun2017eigenvalueshessiandeeplearning,
-      title={Eigenvalues of the Hessian in Deep Learning: Singularity and Beyond}, 
+      title={Eigenvalues of the Hessian in Deep Learning: Singularity and Beyond},
       author={Levent Sagun and Leon Bottou and Yann LeCun},
       year={2017},
-      eprint={1611.07476},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG},
 }
 
 @misc{sagun2018empiricalanalysishessianoverparametrized,
-      title={Empirical Analysis of the Hessian of Over-Parametrized Neural Networks}, 
+      title={Empirical Analysis of the Hessian of Over-Parametrized Neural Networks},
       author={Levent Sagun and Utku Evci and V. Ugur Guney and Yann Dauphin and Leon Bottou},
       year={2018},
-      eprint={1706.04454},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG},
 }
 
 @InProceedings{ghorbani2019,
@@ -57,15 +45,15 @@ year={2024},
 }
 
 @misc{LiMeasuring,
-      title={Measuring the Intrinsic Dimension of Objective Landscapes}, 
+      title={Measuring the Intrinsic Dimension of Objective Landscapes},
       author={Chunyuan Li and Heerad Farkhoor and Rosanne Liu and Jason Yosinski},
       year={2018},
-      eprint={1804.08838},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG},
 }
 
-@ARTICLE{LiDLDR,
+% NOTE: this key was originally also "LiDLDR" (a duplicate of the 2021 arXiv entry
+% above), which breaks bibtex/biber. Renamed to LiDLDRjournal -- repoint any
+% \cite{LiDLDR} that meant the 2023 TPAMI version to \cite{LiDLDRjournal}.
+@ARTICLE{LiDLDRjournal,
 author={Li, Tao and Tan, Lei and Huang, Zhehao and Tao, Qinghua and Liu, Yipeng and Huang, Xiaolin},
 journal={ IEEE Transactions on Pattern Analysis \& Machine Intelligence },
 title={{ Low Dimensional Trajectory Hypothesis is True: DNNs Can Be Trained in Tiny Subspaces }},
@@ -87,4 +75,215 @@ year={2023},
   author =       {Gauch, Martin and Beck, Maximilian and Adler, Thomas and Kotsur, Dmytro and Fiel, Stefan and Eghbal-zadeh, Hamid and Brandstetter, Johannes and Kofler, Johannes and Holzleitner, Markus and Zellinger, Werner and Klotz, Daniel and Hochreiter, Sepp and Lehner, Sebastian},
   booktitle = 	 {Proceedings of The 1st Conference on Lifelong Learning Agents},
   year = 	 {2022},
+}
+
+
+@article{hse-hpc,
+year = {2021},
+publisher = {IOP Publishing},
+volume = {1740},
+pages = {012050},
+author = {Kostenetskiy, P. S. and Chulkevich, R. A. and Kozyrev, V. I.},
+title = {HPC Resources of the Higher School of Economics},
+journal = {Journal of Physics: Conference Series},
+}
+
+@article{mnist,
+  title={The MNIST database of handwritten digits},
+  author={LeCun, Yann},
+  journal={http://yann. lecun. com/exdb/mnist/},
+  year={1998}
+}
+
+@misc{cifar,
+  title={Learning multiple layers of features from tiny images},
+  author={Krizhevsky, Alex},
+  year={2009},
+}
+
+@inproceedings{sst,
+    title = "Recursive Deep Models for Semantic Compositionality Over a Sentiment Treebank",
+    author = "Socher, Richard  and
+      Perelygin, Alex  and
+      Wu, Jean  and
+      Chuang, Jason  and
+      Manning, Christopher D.  and
+      Ng, Andrew  and
+      Potts, Christopher",
+    booktitle = "Proceedings of the 2013 Conference on Empirical Methods in Natural Language Processing",
+    year = "2013",
+}
+
+@misc{
+cans,
+title={Accelerating Newton-Schulz Iteration for Orthogonalization via Chebyshev-type Polynomials},
+author={Ekaterina Grishina and Matvey Smirnov and Maxim Rakhuba},
+year={2026},
+}
+
+@misc{polarexpress,
+      title={The Polar Express: Optimal Matrix Sign Methods and Their Application to the Muon Algorithm}, 
+      author={Noah Amsel and David Persson and Christopher Musco and Robert M. Gower},
+      year={2026}, 
+}
+
+@misc{muon,
+  author       = {Keller Jordan and Yuchen Jin and Vlado Boza and Jiacheng You and
+                  Franz Cesista and Laker Newhouse and Jeremy Bernstein},
+  title        = {Muon: An optimizer for hidden layers in neural networks},
+  year         = {2024},
+}
+
+% ===================================================================
+%  Added for Section XI (adaptive / whitened Hessian: Lemma + Theorems)
+% ===================================================================
+
+@inproceedings{
+  singh2021analytic,
+  title={Analytic Insights into Structure and Rank of Neural Network Hessian Maps},
+  author={Sidak Pal Singh and Gregor Bachmann and Thomas Hofmann},
+  booktitle={Advances in Neural Information Processing Systems},
+  editor={A. Beygelzimer and Y. Dauphin and P. Liang and J. Wortman Vaughan},
+  year={2021},
+}
+
+@inproceedings{cohen2022adaptive,
+  title={Adaptive Gradient Methods at the Edge of Stability},
+  author={Jeremy Cohen and Behrooz Ghorbani and Shankar Krishnan and Naman Agarwal and Sourabh Medapati and Michal Badura and Daniel Suo and Zachary Nado and George E. Dahl and Justin Gilmer},
+  booktitle={NeurIPS 2023 Workshop Heavy Tails in Machine Learning},
+  year={2023},
+}
+
+@book{horn2013matrix,
+  title     = {Matrix Analysis},
+  author    = {Horn, Roger A. and Johnson, Charles R.},
+  year      = {2013},
+}
+
+@article{papyan2019measurements,
+  author       = {Vardan Papyan},
+  title        = {Measurements of Three-Level Hierarchical Structure in the Outliers
+                  in the Spectrum of Deepnet Hessians},
+  journal      = {CoRR},
+  year         = {2019},
+}
+
+@article{bernsteinnewhouse2024,
+  title={Old Optimizer, New Norm: An Anthology},
+  author={Jeremy Bernstein and Laker Newhouse},
+  year={2024},
+}
+
+% ===================================================================
+%  Added for the empirical / AEoS section (Adam, edge of stability,
+%  self-stabilization, Shampoo/Muon, empirical Fisher, Papyan JMLR).
+% ===================================================================
+
+@inproceedings{kingma2015adam,
+  author    = {Kingma, Diederik P. and Ba, Jimmy},
+  title     = {Adam: A Method for Stochastic Optimization},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2015},
+}
+
+
+@inproceedings{cohen2021edge,
+  title={Gradient Descent on Neural Networks Typically Occurs at the Edge of Stability},
+  author={Jeremy Cohen and Simran Kaur and Yuanzhi Li and J Zico Kolter and Ameet Talwalkar},
+  booktitle={International Conference on Learning Representations},
+  year={2021},
+}
+
+@inproceedings{damian2023selfstab,
+  title={Self-Stabilization: The Implicit Bias of Gradient Descent at the Edge of Stability},
+  author={Damian, Alex and Nichani, Eshaan and Lee, Jason D.},
+  booktitle={International Conference on Learning Representations (ICLR)},
+  year={2023},
+}
+
+@inproceedings{gupta2018shampoo,
+  title={Shampoo: Preconditioned Stochastic Tensor Optimization},
+  author={Gupta, Vineet and Koren, Tomer and Singer, Yoram},
+  booktitle={International Conference on Machine Learning (ICML)},
+  year={2018},
+}
+
+@misc{jordan2024muon,
+  title={Muon: An optimizer for hidden layers in neural networks},
+  author={Keller Jordan and Yuchen Jin and Vlado Boza and Jiacheng You and Franz Cesista and Laker Newhouse and Jeremy Bernstein},
+  year={2024},
+  }
+
+@inproceedings{kunstner2019limitations,
+  title={Limitations of the Empirical Fisher Approximation for Natural Gradient Descent},
+  author={Kunstner, Frederik and Hennig, Philipp and Balles, Lukas},
+  booktitle={Advances in Neural Information Processing Systems (NeurIPS)},
+  year={2019},
+}
+
+@article{papyan2020traces,
+  title={Traces of Class/Cross-Class Structure Pervade Deep Learning Spectra},
+  author={Papyan, Vardan},
+  journal={Journal of Machine Learning Research},
+  volume={21},
+  number={252},
+  year={2020},
+}
+
+% ===================================================================
+%  Added for the SWA / iterate-averaging subsection (swa_results.tex)
+% ===================================================================
+
+@inproceedings{izmailov2018swa,
+  title         = {Averaging Weights Leads to Wider Optima and Better Generalization},
+  author        = {Izmailov, Pavel and Podoprikhin, Dmitrii and Garipov, Timur and
+                   Vetrov, Dmitry and Wilson, Andrew Gordon},
+  booktitle     = {Conference on Uncertainty in Artificial Intelligence (UAI)},
+  year          = {2018},
+}
+
+@article{polyak1992acceleration,
+  title     = {Acceleration of Stochastic Approximation by Averaging},
+  author    = {Polyak, Boris T. and Juditsky, Anatoli B.},
+  journal   = {SIAM Journal on Control and Optimization},
+  volume    = {30},
+  number    = {4},
+  year      = {1992},
+}
+
+@inproceedings{ZhaoGaLore,
+      title={{GaLore}: Memory-Efficient {LLM} Training by Gradient Low-Rank Projection},
+      author={Jiawei Zhao and Zhenyu Zhang and Beidi Chen and Zhangyang Wang and Anima Anandkumar and Yuandong Tian},
+      booktitle={International Conference on Machine Learning},
+      year={2024},
+}
+
+@misc{MahdaviniaMoFaSGD,
+      title={Low-rank Momentum Factorization for Memory Efficient Training},
+      author={Pouria Mahdavinia and Mehrdad Mahdavi},
+      year={2025},
+}
+
+@ARTICLE{amari1998natural,
+  author={Amari, Shun-ichi},
+  journal={Neural Computation}, 
+  title={Natural Gradient Works Efficiently in Learning}, 
+  year={1998},
+  volume={10},
+}
+
+
+@InProceedings{martens2015kfac,
+  title = 	 {Optimizing Neural Networks with Kronecker-factored Approximate Curvature},
+  author = 	 {Martens, James and Grosse, Roger},
+  booktitle = 	 {Proceedings of the 32nd International Conference on Machine Learning},
+  year = 	 {2015},
+  volume = 	 {37},
+  series = 	 {Proceedings of Machine Learning Research},
+}
+
+@misc{zakarin2025accelerating,
+      title={Accelerating Neural Network Training Along Sharp and Flat Directions}, 
+      author={Daniyar Zakarin and Sidak Pal Singh},
+      year={2025},
 }
