@@ -1,18 +1,3 @@
-"""MLflow-aware subclass of ExperimentRunner.
-
-Each (task, optimizer, projector, projection) tuple is mapped to one MLflow
-run inside the user-provided experiment. Params are logged once at run start;
-metrics are streamed at every log-step from `_make_log_row`; the model
-state_dict with the lowest train loss seen so far is uploaded as an artifact
-under `best_ckpt/`.
-
-This subclass intentionally owns no training-loop code: it plugs into the
-canonical loop in `ExperimentRunner._run_one` via the observer hooks
-(`_on_run_start`, `_on_log_row`, `_on_run_finished`, `_on_run_failed`).
-Future fixes to the training loop (e.g. full-batch chi_k from Song et al.
-Section 3.2) therefore reach MLflow runs automatically.
-"""
-
 from __future__ import annotations
 
 import contextlib
@@ -37,30 +22,27 @@ _METRIC_KEYS = (
     "accuracy",
     "chi_k",
     "chi_k_ema",
+    "stable_rank",
     "update/raw_update_norm",
     "update/projected_update_norm",
     "update/alignment",
+    "update/swa_n_averaged",
+    "update/swa_lr",
     "subspace_usefulness/rho",
     "epoch_time_sec",
-    "epoch_time_sec_avg",
+    "epoch_time_sec_avg"
 )
 
 
 def _to_param_value(v: Any) -> str:
-    """MLflow params must be primitive-ish. We stringify dicts/lists."""
     if isinstance(v, (str, int, float, bool)) or v is None:
         return v if isinstance(v, str) else str(v)
     return str(v)
 
 
 class MLflowLoggingRunner(ExperimentRunner):
-    """Same as ExperimentRunner, but streams everything into MLflow.
-
-    Overrides the four observer hooks added to `ExperimentRunner` so the
-    training loop itself is untouched. Per-run state (`_best_loss`,
-    `_best_path`, `_tmp_dir`) is initialised in `_on_run_start` because one
-    runner instance executes the full plan and each `_run_one` call needs
-    a fresh checkpoint scratch space.
+    """
+    Пишет параметры, метрики и лучшие чекпойнты в MLflow experiment
     """
 
     @contextlib.contextmanager
@@ -86,7 +68,7 @@ class MLflowLoggingRunner(ExperimentRunner):
             "device": str(self.device),
             "dtype": str(self.config.dtype),
             "seed": seed,
-            "chi_ema_factor": self.config.chi_ema_factor,
+            "chi_ema_factor": self.config.chi_ema_factor
         }
         if proj_spec is not None:
             params_to_log.update(
@@ -96,7 +78,7 @@ class MLflowLoggingRunner(ExperimentRunner):
                     "update_kind": proj_spec.update_kind,
                     "update_every_steps": proj_spec.update_every_steps,
                     "basis_full_dataset": proj_spec.basis_full_dataset,
-                    "switch_on_alignment_ema": proj_spec.switch_on_alignment_ema,
+                    "switch_on_alignment_ema": proj_spec.switch_on_alignment_ema
                 }
             )
         if resume_from is not None:
@@ -105,7 +87,7 @@ class MLflowLoggingRunner(ExperimentRunner):
                     "resumed_from_switch": True,
                     "resume_from_step": resume_from.step,
                     "resume_from_chi_ema": resume_from.chi_ema,
-                    "paired_dom_run_id": resume_from.paired_dom_run_id,
+                    "paired_dom_run_id": resume_from.paired_dom_run_id
                 }
             )
 
@@ -140,6 +122,9 @@ class MLflowLoggingRunner(ExperimentRunner):
             val = row.get(key)
             if isinstance(val, (int, float)) and val is not None:
                 metrics[key.replace("/", "_")] = float(val)
+        for key, val in row.items():
+            if key.startswith(("eigval/", "precond/")) and isinstance(val, (int, float)):
+                metrics[key.replace("/", "_")] = float(val)
         if metrics:
             mlflow.log_metrics(metrics, step=step)
 
@@ -158,15 +143,31 @@ class MLflowLoggingRunner(ExperimentRunner):
             history: list[dict[str, Any]],
             model: torch.nn.Module,
     ) -> None:
-        del run_name, model
+        del run_name
         if self._best_path is not None and self._best_path.exists():
             mlflow.log_artifact(str(self._best_path), artifact_path="best_ckpt")
+
+        if self.config.swa_from_step is not None and self._tmp_dir is not None:
+            swa_path = self._tmp_dir / "swa_ckpt.pt"
+            torch.save({"state_dict": model.state_dict()}, swa_path)
+            mlflow.log_artifact(str(swa_path), artifact_path="swa_ckpt")
         if history:
             final_loss = history[-1].get("loss", float("nan"))
             mlflow.log_metric("final_loss", final_loss)
             switched = history[-1].get("switched_at_step")
             if switched is not None:
                 mlflow.log_metric("switched_at_step", switched)
+            if history[-1].get("update/swa_applied"):
+                final_path = self._tmp_dir / "final_swa_ckpt.pt"
+                torch.save(
+                    {
+                        "step": history[-1].get("step"),
+                        "loss": final_loss,
+                        "state_dict": model.state_dict()
+                    },
+                    final_path,
+                )
+                mlflow.log_artifact(str(final_path), artifact_path="final_swa_ckpt")
 
     def _on_run_failed(self, run_name: str, error: str) -> None:
         del run_name

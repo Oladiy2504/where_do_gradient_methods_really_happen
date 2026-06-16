@@ -16,7 +16,6 @@ def _grads_from_closure(
         params: Iterable[torch.nn.Parameter],
         loss_closure: Closure,
 ) -> tuple[torch.Tensor | None, ...]:
-    """Autograd gradients of ``loss_closure()`` w.r.t. ``params`` (may contain None)."""
     with torch.enable_grad():
         loss = loss_closure()
         if loss.ndim != 0:
@@ -36,7 +35,6 @@ def _grad_or_zero(
         grad: torch.Tensor | None,
         weight_decay: float,
 ) -> torch.Tensor:
-    """Detached float32 gradient (or zeros if None), with optional weight decay."""
     if grad is None:
         grad = torch.zeros_like(param)
     grad = grad.detach().to(device=param.device, dtype=torch.float32)
@@ -46,7 +44,6 @@ def _grad_or_zero(
 
 
 class _AdaptiveLRProjector(LowRankBasisProjector):
-    """Base class for projectors built from recent Adam-style vectors."""
 
     def __init__(
             self,
@@ -194,7 +191,6 @@ class _AdaptiveLRProjector(LowRankBasisProjector):
 
 
 class AdaptiveLRSecondMomentProjector(_AdaptiveLRProjector):
-    """Projector onto covariance directions of 1 / (sqrt(v) + eps)."""
 
     def __init__(
             self,
@@ -242,7 +238,6 @@ class AdaptiveLRSecondMomentProjector(_AdaptiveLRProjector):
 
 
 class AdaptiveLRFullUpdateProjector(_AdaptiveLRProjector):
-    """Projector onto covariance directions of full Adam-style updates."""
 
     def __init__(
             self,
@@ -316,20 +311,6 @@ class AdaptiveLRFullUpdateProjector(_AdaptiveLRProjector):
 
 
 class AdaptiveLRCoordinateProjector(LowRankBasisProjector):
-    """Axis-aligned subspace of the top-k coordinates by largest effective Adam LR.
-
-    Adam's per-coordinate effective learning rate is proportional to
-    ``1 / (sqrt(v) + eps)`` where ``v`` is the second-moment EMA of gradients.
-    This projector selects the ``k`` coordinates with the largest such effective
-    LR (equivalently the smallest ``v``) and projects onto that one-hot coordinate
-    subspace -- testing whether training "happens" in the few coordinates Adam
-    steps hardest in.
-
-    Note: a coordinate that never receives gradient keeps ``v ~= 0`` and so ranks
-    highest by ``1 / sqrt(v)``. With a full-dataset, every-step basis refresh the
-    second moment warms up quickly, so truly-dead coordinates are rare; this is
-    faithful to the literal "top-r by 1/sqrt(v)" definition.
-    """
 
     def __init__(
             self,
@@ -368,7 +349,6 @@ class AdaptiveLRCoordinateProjector(LowRankBasisProjector):
             g = _grad_or_zero(param, grad, self.weight_decay)
             exp_avg_sq.mul_(self.beta2).addcmul_(g, g, value=1.0 - self.beta2)
 
-        # Per-coordinate effective LR is proportional to 1 / (sqrt(v) + eps).
         inv_eff_lr = _flatten(
             [v.sqrt().add(self.eps).reciprocal() for v in self.exp_avg_sq]
         )
@@ -383,7 +363,6 @@ class AdaptiveLRCoordinateProjector(LowRankBasisProjector):
         )
         basis[idx.to(self.device), torch.arange(self.k, device=self.device)] = 1.0
 
-        # One-hot columns from distinct indices are already orthonormal.
         self.set_basis(basis, eigvals=scores.detach().cpu(), orthonormalize=False)
 
         if self.basis is None or self.eigvals is None:

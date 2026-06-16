@@ -6,6 +6,7 @@ from .muon import Muon
 from .sgd import SGD
 from .sgdm import SGDM
 from .subzero import SubZero
+from .swa import SWA
 
 __all__ = [
     "Adam",
@@ -16,4 +17,5 @@ __all__ = [
     "SGD",
     "SGDM",
     "SubZero",
+    "SWA"
 ]

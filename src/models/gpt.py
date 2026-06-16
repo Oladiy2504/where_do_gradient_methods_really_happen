@@ -1,23 +1,3 @@
-"""GPT baseline ported from openai/parameter-golf (`train_gpt.py`).
-
-Decoder-only transformer with RoPE, grouped-query attention, ReLU^2 MLP,
-RMSNorm, learnable residual mixing, encoder/decoder skip connections and a
-(optionally tied) soft-capped LM head.
-
-Two deliberate deviations from the upstream `train_gpt.py` so the model plugs
-into this repo's runner/projector plumbing (see ARCHITECTURE.md):
-
-* ``forward(input_ids) -> logits [B, T, V]`` instead of the upstream fused
-  ``forward(input_ids, target_ids) -> loss``. The next-token cross-entropy is
-  computed by the task's ``loss_fn`` (``src/experiments/tasks.py``), matching
-  the ``forward_fn`` / ``loss_fn`` split used by every other task.
-* Attention runs under the **math** SDPA backend. The Hessian top-k projector
-  and ``chi_k`` measure HVPs via ``autograd.grad(..., create_graph=True)``; the
-  flash / mem-efficient SDPA kernels have no double-backward, only `math` does.
-  GQA is expanded manually (``repeat_interleave``) so we never rely on
-  ``enable_gqa`` having a second-order derivative.
-"""
-
 from __future__ import annotations
 
 import torch
@@ -37,7 +17,6 @@ class RMSNorm(nn.Module):
 
 
 class CastedLinear(nn.Linear):
-    """Linear that keeps weights in their stored dtype and casts at matmul."""
 
     def forward(self, x: Tensor) -> Tensor:
         bias = self.bias.to(x.dtype) if self.bias is not None else None
@@ -113,8 +92,7 @@ class CausalSelfAttention(nn.Module):
         q = apply_rotary_emb(q, cos, sin)
         k = apply_rotary_emb(k, cos, sin)
         q = q * self.q_gain.to(dtype=q.dtype)[None, :, None, None]
-        # Manual GQA expansion: repeat each kv head to match the query heads.
-        # Keeps the math SDPA path double-backward-able (see module docstring).
+
         if self.num_kv_heads != self.num_heads:
             rep = self.num_heads // self.num_kv_heads
             k = k.repeat_interleave(rep, dim=1)
@@ -167,11 +145,6 @@ class Block(nn.Module):
 
 
 class GPT(nn.Module):
-    """parameter-golf GPT. ``forward(input_ids) -> logits [B, T, vocab_size]``.
-
-    Defaults match the upstream environment defaults; the small config used by
-    the ``fineweb_gpt`` task is the constructor default here.
-    """
 
     def __init__(
         self,

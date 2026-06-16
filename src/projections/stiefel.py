@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import copy
+import inspect
 from typing import Callable, Iterable, Sequence
 
 import math
@@ -9,18 +11,8 @@ from src.projections.base import LowRankBasisProjector, _flatten
 from src.optimizers.muon import _cans_explicit3, _delta_orthogonalization
 
 
-
 class StiefelProjector(LowRankBasisProjector):
-    """
-    Learnable projector UU^T, where U lies on the Stiefel manifold:
-    
-    U.T @ U = I
-    
-    U is trained online to capture recent graduents:
-    
-    maximize 0.5 * || U.T @ g ||^2
-    """
-    
+
     def __init__(self,
         params: Iterable[torch.nn.Parameter],
         k: int,
@@ -33,6 +25,12 @@ class StiefelProjector(LowRankBasisProjector):
         eps: float = 1e-12,
         retraction_method: str = "cayley",
     ) -> None:
+        if retraction_method not in ("cayley", "cans"):
+            raise ValueError(
+                f"Unknown retraction_method={retraction_method!r}. "
+                "Expected 'cayley' or 'cans'."
+            )
+
         super().__init__(params, k, device=device, dtype=dtype)
 
         self.lr = lr
@@ -43,13 +41,13 @@ class StiefelProjector(LowRankBasisProjector):
         self.num_updates = 0
 
         self._init_basis()
-        
+
     def _init_basis(self) -> None:
         generator = None
         if self.seed is not None:
             generator = torch.Generator(device=self.device)
             generator.manual_seed(self.seed)
-        
+
         U = torch.randn(
             self.n_params,
             self.k,
@@ -57,13 +55,12 @@ class StiefelProjector(LowRankBasisProjector):
             dtype=self.dtype,
             generator=generator,
         )
-        
+
         self.set_basis(U, eigvals=None, orthonormalize=True)
-        
+
     @staticmethod
     def _sym(A: torch.Tensor) -> torch.Tensor:
         return 0.5 * (A + A.T)
-
 
     def _cayley_retraction_woodbury(
         self,
@@ -71,16 +68,7 @@ class StiefelProjector(LowRankBasisProjector):
         direction: torch.Tensor,
         alpha: float,
     ) -> torch.Tensor:
-        """
-        Cayley retraction via Woodbury formula.
-        """
-        
-        # L = [alpha M, X], shape: n x 2k
-        # R = [X^T;
-        #      alpha (M^T X X^T - M^T)], shape: 2k x n
-        # Y = X + 0.5 * alpha * M
-        # X_next = Y + 1/2 L (I - 1/2 R L)^(-1) R Y
-        
+
         M = direction
         L = torch.cat([alpha * M, X], dim=1)
         MTX = M.T @ X
@@ -100,18 +88,15 @@ class StiefelProjector(LowRankBasisProjector):
         X_next = Y + 0.5 * (L @ correction)
 
         return X_next
-    
+
     def _cans_retraction(self, X: torch.Tensor, direction: torch.Tensor, alpha: float, steps: int = 5, cans_preprocess_steps: int = 4, cans_delta: float = 0.99) -> torch.Tensor:
-        """
-        Retraction via CANS iteration.
-        """
         Y = X + alpha * direction
 
         one_norm = torch.linalg.norm(Y, ord=1)
         inf_norm = torch.linalg.norm(Y, ord=float("inf"))
         scale = torch.rsqrt((one_norm * inf_norm).clamp_min(self.eps))
         Y = Y * scale
-        
+
         pre_coeffs, _ = _delta_orthogonalization(
             n=cans_preprocess_steps,
             delta=cans_delta,
@@ -119,15 +104,15 @@ class StiefelProjector(LowRankBasisProjector):
         for c1, c3, _ in pre_coeffs:
             YTY = Y.T @ Y
             Y = c1 * Y + c3 * (Y @ YTY)
-            
+
         left, right = 1.0 - cans_delta, 1.0 + cans_delta
-        
+
         for _ in range(steps):
             c1, c3, err = _cans_explicit3(left, right)
             YTY = Y.T @ Y
             Y = c1 * Y + c3 * (Y @ YTY)
             left, right = 1.0 - err, 1.0 + err
-            
+
         return Y
 
     def update_from_flat_vector(self, flat_vec: torch.Tensor) -> tuple[None, torch.Tensor]:
@@ -157,6 +142,11 @@ class StiefelProjector(LowRankBasisProjector):
                 U_new = self._cayley_retraction_woodbury(U, riem_grad, self.lr)
             elif self.retraction_method == "cans":
                 U_new = self._cans_retraction(U, riem_grad, self.lr)
+            else:
+                raise ValueError(
+                    f"Unknown retraction_method={self.retraction_method!r}. "
+                    "Expected 'cayley' or 'cans'."
+                )
             self.set_basis(U_new, eigvals=None, orthonormalize=False)
             self.num_updates += 1
 
@@ -200,3 +190,46 @@ class StiefelProjector(LowRankBasisProjector):
         flat_grad = _flatten(grad_tree)
 
         return self.update_from_flat_vector(flat_grad)
+
+
+def update_stiefel_projector_from_optimizer_update(projector: StiefelProjector, ctx) -> None:
+    optimizer = ctx.optimizer
+    if optimizer is None:
+        raise RuntimeError("ProjectorContext.optimizer is None; cannot build optimizer update.")
+
+    all_params = [p for group in optimizer.param_groups for p in group["params"]]
+    optimizer.zero_grad(set_to_none=True)
+    with torch.enable_grad():
+        loss = ctx.loss_closure()
+        if loss.ndim != 0:
+            loss = loss.mean()
+        loss.backward()
+
+    param_backup = {p: p.detach().clone() for p in all_params}
+    state_backup = {
+        p: {
+            k: (v.detach().clone() if torch.is_tensor(v) else copy.deepcopy(v))
+            for k, v in st.items()
+        }
+        for p, st in optimizer.state.items()
+    }
+    last_info_backup = getattr(optimizer, "last_info", None)
+
+    supports_projection = "projector" in inspect.signature(optimizer.step).parameters
+    if supports_projection:
+        optimizer.step(projector=None, projection="none")
+    else:
+        optimizer.step()
+
+    update = [param_backup[p] - p.detach() for p in projector.params]
+
+    with torch.no_grad():
+        for p in all_params:
+            p.copy_(param_backup[p])
+    optimizer.state.clear()
+    optimizer.state.update(state_backup)
+    if last_info_backup is not None:
+        optimizer.last_info = last_info_backup
+    optimizer.zero_grad(set_to_none=True)
+
+    projector.update_from_flat_vector(_flatten(update))

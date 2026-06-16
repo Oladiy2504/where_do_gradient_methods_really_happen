@@ -94,7 +94,7 @@ class Adam(Optimizer):
             "raw_update_norm": info.raw_norm,
             "projected_update_norm": info.projected_norm,
             "alignment": info.alignment,
-            "eigvals": info.eigvals,
+            "eigvals": info.eigvals
         }
 
         for p, u in zip(all_params, update):

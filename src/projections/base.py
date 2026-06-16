@@ -11,14 +11,6 @@ ProjectionMode = Literal["none", "dom", "bulk"]
 
 @dataclass
 class ProjectorInfo:
-    """
-    Class containing data for logging.
-    raw_norm - norm of raw update (before projection)
-    projected_norm - norm of projected update
-    alignment - fraction: projected_norm / raw_norm
-    basis_shape - usually (num_params, k)
-    eigvals - top-k eigenvalues if applicable
-    """
     raw_norm: float
     projected_norm: float
     alignment: float
@@ -28,6 +20,16 @@ class ProjectorInfo:
 
 def _flatten(tensors: Sequence[torch.Tensor]) -> torch.Tensor:
     return torch.cat([t.reshape(-1) for t in tensors], dim=0)
+
+
+def _rademacher(
+        size: int | tuple[int, ...],
+        *,
+        device: torch.device | str,
+        dtype: torch.dtype,
+) -> torch.Tensor:
+    bits = torch.rand(size, device=device, dtype=dtype) < 0.5
+    return bits.to(dtype).mul_(2).sub_(1)
 
 
 def _unflatten_like(flat: torch.Tensor, like: Sequence[torch.Tensor]) -> tuple[torch.Tensor, ...]:
@@ -46,20 +48,12 @@ def _unflatten_like(flat: torch.Tensor, like: Sequence[torch.Tensor]) -> tuple[t
 
 
 def _tree_norm(tensors: Sequence[torch.Tensor]) -> torch.Tensor:
-    """
-    Computes the norm of the list of tensors.
-    """
     return torch.linalg.vector_norm(_flatten([t.detach() for t in tensors]))
 
 
 class BaseProjector(ABC):
-    """
-    Abstract interface for all update projectors.
-    """
-
     @abstractmethod
     def update_basis(self, *args, **kwargs):
-        """Recompute or update the internal subspace basis."""
         raise NotImplementedError
 
     @abstractmethod
@@ -80,10 +74,8 @@ class BaseProjector(ABC):
 
 
 class LowRankBasisProjector(BaseProjector):
-    """Base class for projectors represented by an orthonormal basis Q.
-
-    The class knows how to project updates.
-    Subclasses only need to define how Q is constructed.
+    """
+    База для проекторов, которые хранят ортонормированный Q
     """
 
     def __init__(
@@ -131,13 +123,6 @@ class LowRankBasisProjector(BaseProjector):
             eigvals: torch.Tensor | None = None,
             orthonormalize: bool = True,
     ) -> None:
-        """Set basis Q explicitly.
-
-        Args:
-            basis: tensor of shape [num_trainable_params, k].
-            eigvals: optional eigenvalues or scores associated with basis columns.
-            orthonormalize: if True, apply QR to ensure Q^T Q = I.
-        """
         if basis.ndim != 2:
             raise ValueError(f"basis must be 2D, got shape {tuple(basis.shape)}.")
 
@@ -166,11 +151,6 @@ class LowRankBasisProjector(BaseProjector):
         raise NotImplementedError
 
     def chi_k_of(self, flat_vec: torch.Tensor) -> float:
-        """Song et al. (2025) alignment ratio: ``‖Q^T v‖₂ / ‖v‖₂``.
-
-        Returns 0.0 if `flat_vec` has zero norm. Requires `update_basis(...)` to
-        have been called first.
-        """
         if self.basis is None:
             raise RuntimeError("Projector basis is empty. Call update_basis(...) first.")
 
@@ -182,7 +162,6 @@ class LowRankBasisProjector(BaseProjector):
         return proj_norm / v_norm
 
     def project_flat(self, flat_update: torch.Tensor, mode: ProjectionMode) -> torch.Tensor:
-        """Project a flat update vector onto dom or bulk."""
         if mode == "none":
             return flat_update
 
@@ -191,7 +170,6 @@ class LowRankBasisProjector(BaseProjector):
 
         u = flat_update.to(device=self.basis.device, dtype=self.basis.dtype)
 
-        # dom = Q Q^T u
         dom = self.basis @ (self.basis.T @ u)
 
         if mode == "dom":
@@ -203,10 +181,6 @@ class LowRankBasisProjector(BaseProjector):
         raise ValueError(f"Unknown projection mode: {mode}")
 
     def project_update(self, update: Sequence[torch.Tensor], mode: ProjectionMode) -> tuple[torch.Tensor, ...]:
-        """
-        Project an update tuple with the same order as `self.all_params`.
-        Non-trainable parameter updates are returned unchanged.
-        """
         if len(update) != len(self.all_params):
             raise ValueError(
                 f"Expected update of length {len(self.all_params)}, got {len(update)}."
@@ -259,12 +233,6 @@ def project_or_passthrough(
         projector: BaseProjector | None,
         projection: ProjectionMode,
 ) -> tuple[tuple[torch.Tensor, ...], ProjectorInfo]:
-    """Project ``raw_update`` if a projector is supplied, else pass it through.
-
-    Returns a tuple ``(projected_update, info)`` where ``info`` is a fully
-    populated ``ProjectorInfo``. When no projection is performed, ``info``
-    reports the raw norm with alignment 1.0 and no basis/eigval data.
-    """
     if projector is None or projection == "none":
         flat = _flatten([u.detach() for u in raw_update])
         raw_norm = float(torch.linalg.vector_norm(flat).cpu())

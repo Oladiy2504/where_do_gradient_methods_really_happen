@@ -6,7 +6,6 @@ from src.projections.base import LowRankBasisProjector
 
 
 class RandomSubspaceProjector(LowRankBasisProjector):
-    """Projector onto a random k-dimensional subspace."""
 
     def __init__(
         self,

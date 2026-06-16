@@ -22,6 +22,10 @@ htmlcov/
 # IDE
 .idea/
 .vscode/
+*.swp
+*.swo
+.claude
+CLAUDE.md
 
 # OS
 .DS_Store
@@ -29,11 +33,14 @@ Thumbs.db
 
 # Other
 *.executed.ipynb
-uv.lock
 
 # Logs + datasets
 notebooks/data
 notebooks/runs
 mlruns
+data
 notebooks/data
 notebooks/runs
+/local_runs
+
+report/compiled

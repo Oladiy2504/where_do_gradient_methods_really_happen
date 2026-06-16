@@ -83,8 +83,6 @@ class ResNet8CIFAR(nn.Module):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
 
-        # Zero-initialize the last BN in each residual branch so the branch
-        # starts as identity (arxiv 1706.02677).
         for m in self.modules():
             if isinstance(m, BasicBlock):
                 nn.init.constant_(m.bn2.weight, 0)

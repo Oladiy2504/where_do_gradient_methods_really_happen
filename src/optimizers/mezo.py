@@ -1,25 +1,3 @@
-"""MeZO: Memory-Efficient Zeroth-Order Optimizer (with optional projection).
-
-Reference:
-    Malladi, Gao, Nichani, Damian, Lee, Chen, Arora.
-    "Fine-Tuning Language Models with Just Forward Passes." NeurIPS 2023.
-    arXiv:2305.17333. https://github.com/princeton-nlp/MeZO
-
-Each step samples a Gaussian direction ``z``, evaluates the loss at
-``theta +/- eps * z`` and uses the SPSA estimate
-
-    g ~= ((f(theta + eps z) - f(theta - eps z)) / (2 eps)) * z
-
-to take an SGD-style update. Randomness is drawn from a private
-``torch.Generator`` so the global PyTorch RNG is left untouched.
-
-When called without a projector, ``z`` is regenerated from the same generator
-state instead of being stored, preserving the inference-level memory
-footprint of the original algorithm. When a projector is supplied, the full
-direction tensor must be materialised so the raw update can be projected
-into the requested subspace.
-"""
-
 from __future__ import annotations
 
 import warnings
@@ -37,20 +15,6 @@ from src.projections.base import _tree_norm, _unflatten_like
 
 
 class MeZO(Optimizer):
-    """Zeroth-order SGD with optional subspace projection.
-
-    Args:
-        params: iterable of parameters or parameter groups.
-        lr: learning rate.
-        eps: perturbation scale.
-        weight_decay: decoupled L2 regularization coefficient.
-        seed: optional seed for the private ``torch.Generator``.
-        subspace_sampling: if True (and a projector with a ready basis is
-            supplied at ``step`` time), sample the direction directly in the
-            projector subspace as ``z = Q @ xi``, ``xi ~ N(0, I_k)``. This
-            corresponds to "MeZO restricted to subspace Q" rather than
-            "MeZO in the full space then projected". Defaults to False.
-    """
 
     def __init__(
         self,
@@ -91,7 +55,6 @@ class MeZO(Optimizer):
 
     @torch.no_grad()
     def _shift_inplace(self, gen_state: torch.Tensor, alpha: float) -> None:
-        """Re-sample z from ``gen_state`` and add ``alpha * z`` to each param."""
         self._generator.set_state(gen_state)
         for p in self._all_params():
             if not p.requires_grad:
@@ -101,7 +64,6 @@ class MeZO(Optimizer):
 
     @torch.no_grad()
     def _materialize_z(self, gen_state: torch.Tensor) -> tuple[torch.Tensor, ...]:
-        """Materialise the direction ``z`` aligned with ``self._all_params()``."""
         self._generator.set_state(gen_state)
         out: list[torch.Tensor] = []
         for p in self._all_params():
@@ -114,9 +76,6 @@ class MeZO(Optimizer):
     def _materialize_z_from_subspace(
         self, projector: BaseProjector
     ) -> tuple[torch.Tensor, ...]:
-        """Sample ``xi ~ N(0, I_k)`` via the private generator and return
-        ``z = Q @ xi`` reshaped per ``self._all_params()`` (zeros for
-        non-trainable parameters)."""
         Q = projector.basis
         xi = torch.randn(
             Q.shape[1],
@@ -124,7 +83,7 @@ class MeZO(Optimizer):
             dtype=Q.dtype,
             generator=self._generator,
         )
-        z_flat = Q @ xi  # [n_trainable_params]
+        z_flat = Q @ xi
 
         trainable_params = [p for p in self._all_params() if p.requires_grad]
         z_trainable = _unflatten_like(z_flat, trainable_params)
@@ -147,7 +106,6 @@ class MeZO(Optimizer):
         projector: BaseProjector | None = None,
         projection: ProjectionMode = "none",
     ) -> torch.Tensor:
-        """Run one MeZO step. ``closure`` must return a scalar loss tensor."""
         if closure is None:
             raise ValueError("MeZO requires a closure that returns a scalar loss.")
         if projection != "none" and projector is None:
@@ -172,9 +130,6 @@ class MeZO(Optimizer):
                 stacklevel=2,
             )
 
-        # Pre-materialise z when needed (projection or subspace sampling). For
-        # the pure non-projected, full-space path we keep the inference-memory
-        # behaviour and regenerate z from the saved generator state.
         z: tuple[torch.Tensor, ...] | None
         if use_subspace_sampling:
             z = self._materialize_z_from_subspace(projector)
@@ -183,7 +138,6 @@ class MeZO(Optimizer):
         else:
             z = None
 
-        # +eps shift
         if z is not None:
             for p, zi in zip(self._all_params(), z):
                 if p.requires_grad:
@@ -195,7 +149,6 @@ class MeZO(Optimizer):
             loss_plus = closure()
         loss_plus_val = float(loss_plus.detach())
 
-        # -2eps shift -> theta - eps z
         if z is not None:
             for p, zi in zip(self._all_params(), z):
                 if p.requires_grad:
@@ -207,7 +160,6 @@ class MeZO(Optimizer):
             loss_minus = closure()
         loss_minus_val = float(loss_minus.detach())
 
-        # +eps shift -> back to theta
         if z is not None:
             for p, zi in zip(self._all_params(), z):
                 if p.requires_grad:
@@ -218,7 +170,7 @@ class MeZO(Optimizer):
         coeff = (loss_plus_val - loss_minus_val) / (2.0 * eps)
 
         if use_subspace_sampling:
-            # z already lives in Q; the projected update is just coeff * z.
+
             train_z = [zi for p, zi in zip(self._all_params(), z) if p.requires_grad]
             z_norm = float(_tree_norm(train_z).cpu())
             raw_norm = abs(coeff) * z_norm
@@ -229,7 +181,7 @@ class MeZO(Optimizer):
                 "raw_update_norm": raw_norm,
                 "projected_update_norm": raw_norm,
                 "alignment": 1.0,
-                "eigvals": getattr(projector, "eigvals", None),
+                "eigvals": getattr(projector, "eigvals", None)
             }
 
             idx = 0
@@ -255,7 +207,7 @@ class MeZO(Optimizer):
                 "raw_update_norm": info.raw_norm,
                 "projected_update_norm": info.projected_norm,
                 "alignment": info.alignment,
-                "eigvals": info.eigvals,
+                "eigvals": info.eigvals
             }
 
             idx = 0
@@ -272,9 +224,7 @@ class MeZO(Optimizer):
                     p.data.add_(u, alpha=-lr)
         else:
             self._generator.set_state(gen_state)
-            # Regenerate z once, compute its norm, then apply the update. We
-            # touch each parameter only once so memory stays at the inference
-            # forward-pass level (z is consumed parameter-by-parameter).
+
             z_sq_sum = 0.0
             for group in self.param_groups:
                 lr = group["lr"]
@@ -295,7 +245,7 @@ class MeZO(Optimizer):
                 "raw_update_norm": raw_norm,
                 "projected_update_norm": raw_norm,
                 "alignment": 1.0,
-                "eigvals": None,
+                "eigvals": None
             }
 
         return torch.tensor(

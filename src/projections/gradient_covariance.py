@@ -17,12 +17,6 @@ GradientCovarianceSolver = Literal["gram_eigh", "eigsh", "dense_eigh", "cola_lan
 
 
 class _FunctionalModel:
-    """Minimal model-like wrapper backed by torch.func.functional_call.
-
-    TaskSpec.loss_fn expects something callable like a normal module. This
-    wrapper lets the existing loss_fn run under torch.func.grad/vmap without
-    changing task code.
-    """
 
     def __init__(
             self,
@@ -43,10 +37,6 @@ class _FunctionalModel:
             kwargs,
         )
 
-
-# ---------------------------------------------------------------------------
-# Batch tree helpers
-# ---------------------------------------------------------------------------
 
 def _batch_size(batch: Batch) -> int:
     if torch.is_tensor(batch):
@@ -85,7 +75,6 @@ def _slice_batch(batch: Batch, start: int, end: int) -> Batch:
 
 
 def _batch_in_dims(batch: Batch) -> Batch:
-    """Return an in_dims tree matching `batch` for torch.func.vmap."""
     if torch.is_tensor(batch):
         return 0
     if isinstance(batch, Mapping):
@@ -98,7 +87,6 @@ def _batch_in_dims(batch: Batch) -> Batch:
 
 
 def _unsqueeze_batch_dim(batch: Batch) -> Batch:
-    """Turn one vmapped sample back into a one-sample mini-batch."""
     if torch.is_tensor(batch):
         return batch.unsqueeze(0)
     if isinstance(batch, Mapping):
@@ -110,10 +98,6 @@ def _unsqueeze_batch_dim(batch: Batch) -> Batch:
     raise TypeError(f"Unsupported batch field type for vmap: {type(batch).__name__}.")
 
 
-# ---------------------------------------------------------------------------
-# Per-sample gradient builders
-# ---------------------------------------------------------------------------
-
 def _flat_grad_from_loss(
         loss: torch.Tensor,
         params: Sequence[torch.Tensor],
@@ -121,7 +105,6 @@ def _flat_grad_from_loss(
         retain_graph: bool,
         create_graph: bool = False,
 ) -> torch.Tensor:
-    """Compute one flattened gradient sample d loss / d params."""
     if loss.ndim != 0:
         loss = loss.mean()
 
@@ -145,13 +128,6 @@ def flat_gradients_from_losses(
         losses: torch.Tensor,
         params: Sequence[torch.Tensor],
 ) -> torch.Tensor:
-    """Build [num_samples, num_params] from unreduced losses.
-
-    This path is generic but loops over scalar losses because PyTorch's normal
-    autograd API does not directly return a dense per-sample Jacobian. For a
-    faster path with ordinary task.loss_fn, use flat_gradients_from_loss_fn(...)
-    with method="vmap" or "auto".
-    """
     if losses.ndim == 0:
         losses = losses.reshape(1)
     else:
@@ -179,7 +155,6 @@ def flat_gradients_from_loss_fn_loop(
         params: Sequence[torch.Tensor],
         loss_fn: LossFn,
 ) -> torch.Tensor:
-    """Safe fallback: one ordinary autograd.grad call per sample."""
     n_samples = _batch_size(batch)
     if n_samples <= 0:
         raise ValueError("Cannot build gradient covariance from an empty batch.")
@@ -209,14 +184,6 @@ def flat_gradients_from_loss_fn_vmap(
         *,
         chunk_size: int | None = None,
 ) -> torch.Tensor:
-    """Fast per-sample gradients via torch.func.grad + vmap.
-
-    `loss_fn` is still the repository's ordinary scalar TaskSpec.loss_fn.
-    vmap receives one sample at a time, then `_unsqueeze_batch_dim` restores
-    a mini-batch dimension so existing model/loss code can remain unchanged.
-
-    Use chunk_size to trade speed for lower peak memory.
-    """
     n_samples = _batch_size(batch)
     if n_samples <= 0:
         raise ValueError("Cannot build gradient covariance from an empty batch.")
@@ -273,12 +240,6 @@ def flat_gradients_from_loss_fn(
         method: PerSampleGradMethod = "auto",
         chunk_size: int | None = None,
 ) -> torch.Tensor:
-    """Build flat per-sample gradients using the existing task loss_fn.
-
-    method="vmap" is usually much faster than the loop fallback, but it requires
-    the model/loss code to be compatible with torch.func.functional_call and
-    vmap. method="auto" tries vmap first and falls back to the safe loop.
-    """
     if method not in ("auto", "vmap", "loop"):
         raise ValueError(f"Unknown per-sample gradient method: {method!r}.")
 
@@ -308,20 +269,12 @@ def flat_gradients_from_loss_fn(
     )
 
 
-# ---------------------------------------------------------------------------
-# Covariance operator / projector
-# ---------------------------------------------------------------------------
-
 def empirical_gradient_covariance(
         flat_grads: torch.Tensor,
         *,
         center: bool = True,
         ddof: int = 1,
 ) -> torch.Tensor:
-    """Explicit empirical covariance/second-moment matrix of flat gradients.
-
-    Suitable only for small models.
-    """
     if flat_grads.ndim != 2:
         raise ValueError(
             f"flat_grads must have shape [num_samples, num_params], got {tuple(flat_grads.shape)}."
@@ -342,12 +295,6 @@ def empirical_gradient_covariance(
 
 
 class GradientCovarianceEigenspaceProjector(MatrixEigenspaceProjector):
-    """Projector onto top-k eigenspace of empirical gradient covariance.
-
-    The expensive part is constructing the per-sample gradient matrix G.
-    By default, update_basis_from_loss_fn uses torch.func.grad + vmap and
-    falls back to a safe Python loop if the task is not vmap-compatible.
-    """
 
     def __init__(
             self,
@@ -428,7 +375,6 @@ class GradientCovarianceEigenspaceProjector(MatrixEigenspaceProjector):
         X = self._centered_flat_grads
         v = flat_vec.to(device=X.device, dtype=X.dtype)
 
-        # C v = X^T (X v) / denom, without materializing C.
         return (X.T @ (X @ v)) / self._denom
 
     def update_basis_from_loss_fn(
@@ -440,7 +386,6 @@ class GradientCovarianceEigenspaceProjector(MatrixEigenspaceProjector):
             method: PerSampleGradMethod | None = None,
             chunk_size: int | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Refresh basis from ordinary scalar TaskSpec.loss_fn."""
         flat_grads = flat_gradients_from_loss_fn(
             model=model,
             batch=batch,
@@ -452,21 +397,6 @@ class GradientCovarianceEigenspaceProjector(MatrixEigenspaceProjector):
         return self.update_basis(flat_grads=flat_grads)
 
     def _update_basis_gram_eigh(self) -> tuple[torch.Tensor, torch.Tensor]:
-        """Refresh basis through the low-rank Gram eigenproblem.
-
-        If X is the centered gradient matrix with shape [m, p], the empirical
-        covariance is C = X.T @ X / denom. Instead of diagonalizing C in
-        parameter space, solve the much smaller eigenproblem
-
-            K = X @ X.T / denom,  K u_i = lambda_i u_i,
-
-        and recover parameter-space eigenvectors as
-
-            v_i = X.T @ u_i / sqrt(denom * lambda_i).
-
-        This is exact for the non-zero spectrum of the empirical covariance
-        after X has been constructed.
-        """
         if self._centered_flat_grads is None or self._denom is None:
             raise RuntimeError("Gradient samples are not set.")
 
@@ -493,9 +423,6 @@ class GradientCovarianceEigenspaceProjector(MatrixEigenspaceProjector):
                 "Increase basis_subsample or reduce k."
             )
 
-        # K is only [num_samples, num_samples]. Build it on the current device,
-        # then run the symmetric eigensolve on CPU for compatibility with MPS
-        # and for stable small dense linear algebra.
         K = (X @ X.T) / denom
         K = 0.5 * (K + K.T)
         K_cpu = K.detach().to(device="cpu", dtype=torch.float64)
@@ -504,7 +431,7 @@ class GradientCovarianceEigenspaceProjector(MatrixEigenspaceProjector):
 
         if self.which == "LA":
             scores = vals_cpu
-        else:  # self.which == "LM"
+        else:
             scores = vals_cpu.abs()
 
         order = torch.argsort(scores, descending=True)
@@ -532,8 +459,6 @@ class GradientCovarianceEigenspaceProjector(MatrixEigenspaceProjector):
         scale = torch.sqrt((float(denom) * eigvals).clamp_min(torch.finfo(eigvals.dtype).tiny))
         basis = basis / scale.unsqueeze(0)
 
-        # Formula above produces orthonormal columns up to numerical error.
-        # Avoid QR so the column/eigenvalue correspondence is preserved.
         self.set_basis(
             basis.detach(),
             eigvals=eigvals_cpu.to(dtype=torch.float32),
@@ -548,7 +473,6 @@ class GradientCovarianceEigenspaceProjector(MatrixEigenspaceProjector):
             *,
             flat_grads: torch.Tensor | None = None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Refresh top-k gradient-covariance eigenspace."""
         if flat_grads is None:
             if losses_closure is None:
                 raise ValueError("Pass either flat_grads or losses_closure.")
@@ -572,8 +496,7 @@ class GradientCovarianceEigenspaceProjector(MatrixEigenspaceProjector):
 
                 eigvals, basis = super().update_basis()
         finally:
-            # Keep mean_grad/eigvals/basis, but drop the potentially large
-            # gradient matrix and dense covariance after the refresh.
+
             self._centered_flat_grads = None
             self._denom = None
             self.matrix = None
@@ -582,11 +505,6 @@ class GradientCovarianceEigenspaceProjector(MatrixEigenspaceProjector):
 
 
 def update_gradient_covariance_projector(projector: Any, ctx: Any) -> None:
-    """Runner ProjectorSpec.update_fn for GradientCovarianceEigenspaceProjector.
-
-    This deliberately uses duck typing instead of importing ProjectorContext,
-    so src.projections does not depend on src.experiments.runner.
-    """
     if ctx.basis_batch is None:
         raise RuntimeError("basis_batch is None; cannot build gradient covariance basis.")
     projector.update_basis_from_loss_fn(

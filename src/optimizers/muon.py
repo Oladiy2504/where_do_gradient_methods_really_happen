@@ -27,7 +27,7 @@ _POLAR_EXPRESS5_RAW_COEFFS: tuple[tuple[float, float, float], ...] = (
     (2.300652019954817, -1.6689039845747493, 0.4188073119525673),
     (1.891301407787398, -1.2679958271945868, 0.37680408948524835),
     (1.8750014808534479, -1.2500016453999487, 0.3750001645474248),
-    (1.875, -1.25, 0.375),
+    (1.875, -1.25, 0.375)
 )
 
 _POLAR_EXPRESS5_COEFFS: tuple[tuple[float, float, float], ...] = tuple(
@@ -37,11 +37,6 @@ _POLAR_EXPRESS5_COEFFS: tuple[tuple[float, float, float], ...] = tuple(
 
 
 def _cans_explicit3(a: float, b: float) -> tuple[float, float, float]:
-    """Optimal odd cubic CANS polynomial on [a, b].
-
-    Returns coefficients c1, c3 and approximation error err for
-        p(x) = c1 * x + c3 * x^3.
-    """
     s = a * a + a * b + b * b
     e = math.sqrt(s / 3.0)
     denom = 2.0 * e**3 + a * a * b + b * b * a
@@ -51,24 +46,14 @@ def _cans_explicit3(a: float, b: float) -> tuple[float, float, float]:
     err = (2.0 * e**3 - a * a * b - b * b * a) / denom
     return c1, c3, err
 
+
 def _delta_orthogonalization(n=1, delta=0.3, B=1):
-    """Find polynomial coefficients for the delta-orthogonalization phase.
-
-    This is the preprocessing phase for CANS.
-
-    Uses binary search to find the left endpoint Al such that n preprocessing
-    iterations of explicit3 polynomials map singular values from [Al, B]
-    into [1 - delta, 1 + delta].
-
-    Returns the list of (c1, c3, err) coefficients for each iteration and
-    the found left endpoint Al.
-    """
     Al = 0.0
     Ar = B
     e = 100
-    
+
     coeffs_list: list[tuple[float, float, float]] = []
-    
+
     while abs(e - delta) > 1e-7:
         a, b = (Al + Ar) / 2.0, B
         coeffs_list = []
@@ -80,9 +65,9 @@ def _delta_orthogonalization(n=1, delta=0.3, B=1):
             Ar = (Al + Ar) / 2.0
         else:
             Al = (Al + Ar) / 2.0
-    
+
     return coeffs_list, (Al + Ar) / 2.0
-        
+
 
 def _muon_orthogonalize(
     x: torch.Tensor,
@@ -94,12 +79,8 @@ def _muon_orthogonalize(
     cans_preprocess_steps: int = 0,
     cans_delta: float = 0.99,
 ) -> torch.Tensor:
-    """Newton-Schulz orthogonalisation for tensors with ``ndim >= 2``.
-
-    Higher-rank tensors (e.g. conv weights with ``ndim == 4``) are flattened
-    to ``[fan_out, -1]`` for the iteration and reshaped back afterwards, so
-    they actually receive the orthogonalisation step rather than passing
-    through unchanged.
+    """
+    Newton-Schulz orthogonalization для матриц и сверточных весов
     """
     if x.ndim < 2:
         return x
@@ -148,19 +129,17 @@ def _muon_orthogonalize(
             for c1, c3, _ in pre_coeffs:
                 yy = y @ y.t()
                 y = c1 * y + c3 * (yy @ y)
-            
+
             left, right = 1.0 - cans_delta, 1.0 + cans_delta
         else:
             left, right = cans_a, 1.0
-            
+
         for _ in range(steps):
             c1, c3, err = _cans_explicit3(left, right)
             yy = y @ y.t()
             y = c1 * y + c3 * (yy @ y)
 
             left, right = 1.0 - err, 1.0 + err
-
-
 
     else:
         y = y / (y.norm() * 1.01 + eps)
@@ -179,21 +158,9 @@ def _muon_orthogonalize(
     return y.to(dtype=original_dtype).reshape(original_shape)
 
 
-
 class Muon(Optimizer):
-    """Heavy-ball SGD + Newton-Schulz orthogonalisation.
-
-    The ``orth_after_projection`` flag controls the order of orthogonalisation
-    and subspace projection:
-
-    * ``True`` (default, backward-compatible): project the momentum direction
-      first, then orthogonalise the projected vector. The applied update
-      generally leaves the subspace ``Q`` again -- ``last_info["alignment"]``
-      describes the momentum alignment, not the alignment of the actually
-      applied update.
-    * ``False``: orthogonalise the momentum direction first, then project.
-      The applied update truly lives in ``Q`` (for ``dom``) or its complement
-      (for ``bulk``) and ``last_info["alignment"]`` faithfully describes it.
+    """
+    Heavy-ball update с Muon-ортогонализацией направления
     """
 
     def __init__(
@@ -205,7 +172,7 @@ class Muon(Optimizer):
         ns_steps: int = 5,
         weight_decay: float = 0.01,
         full_ort: bool = False,
-        orth_after_projection: bool = True,
+        orth_after_projection: bool = False,
         polynom: PolynomialMode = "jordan",
         cans_a: float = 1e-8,
         cans_preprocess_steps: int = 4,
@@ -284,7 +251,6 @@ class Muon(Optimizer):
 
                 raw_update.append(direction)
 
-        # Per-parameter settings indexed in the flat order used above.
         per_param_settings: list[tuple[int, bool, bool, PolynomialMode, float]] = []
         for group in self.param_groups:
             for _ in group["params"]:
@@ -296,12 +262,12 @@ class Muon(Optimizer):
                         group["polynom"],
                         group["cans_a"],
                         group["cans_preprocess_steps"],
-                        group["cans_delta"],
+                        group["cans_delta"]
                     )
                 )
 
         if any(not s[2] for s in per_param_settings):
-            # Orthogonalise first, then project. The applied update lives in Q.
+            # Проекция после ортогонализации оставляет примененный update в Q
             pre_proj: list[torch.Tensor] = []
             for p, u, (ns_steps, full_ort, _, polynom, cans_a, cans_preprocess_steps, cans_delta) in zip(
                 all_params, raw_update, per_param_settings
@@ -334,7 +300,7 @@ class Muon(Optimizer):
             "projected_update_norm": info.projected_norm,
             "alignment": info.alignment,
             "eigvals": info.eigvals,
-            "polynom": self.param_groups[0]["polynom"],
+            "polynom": self.param_groups[0]["polynom"]
         }
 
         idx = 0
@@ -368,10 +334,9 @@ class Muon(Optimizer):
                         cans_delta=cans_delta,
                     )
 
-                # Decoupled weight decay sits outside the projection.
                 if wd != 0.0:
                     p.mul_(1.0 - lr * wd)
 
                 p.add_(u.to(dtype=p.dtype), alpha=-lr)
 
-        return loss 
+        return loss

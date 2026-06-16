@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from torch.nn.attention import SDPBackend, sdpa_kernel
 
 
 class TransformerSST2(nn.Module):
@@ -45,7 +46,8 @@ class TransformerSST2(nn.Module):
 
         key_padding_mask = ~attention_mask.bool()
 
-        x = self.encoder(x, src_key_padding_mask=key_padding_mask)
+        with sdpa_kernel([SDPBackend.MATH]):
+            x = self.encoder(x, src_key_padding_mask=key_padding_mask)
 
         mask = attention_mask.unsqueeze(-1).float()
         x = (x * mask).sum(dim=1) / mask.sum(dim=1).clamp_min(1.0)

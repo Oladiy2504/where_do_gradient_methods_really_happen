@@ -23,9 +23,6 @@ LayerwiseRankMode = Literal["fixed", "fraction", "energy"]
 
 @dataclass
 class _LayerwiseSVDBasis:
-    """
-    SVD-базис для одного слоя при layerwise проекции
-    """
     index: int
     matrix_shape: tuple[int, int]
     rank: int
@@ -35,9 +32,6 @@ class _LayerwiseSVDBasis:
 
 
 def _auto_matrix_shape(n: int) -> tuple[int, int]:
-    """
-    Подбор ~ квадратной формы матрицы при global проекции
-    """
     rows = max(1, int(math.floor(math.sqrt(n))))
     cols = int(math.ceil(n / rows))
     return rows, cols
@@ -45,19 +39,6 @@ def _auto_matrix_shape(n: int) -> tuple[int, int]:
 
 def flatten_optimizer_state(params: Sequence[torch.nn.Parameter], optimizer: torch.optim.Optimizer, state_key: str, *,
                             device: torch.device, dtype: torch.dtype) -> tuple[torch.Tensor, int]:
-    """
-    Собирает optimizer momentum/state tensors в один плоский вектор.
-
-    Аргументы:
-        params: параметры, для которых нужно собрать state, в нужном порядке.
-        optimizer: optimizer, из которого читается состояние
-        state_key: ключ state tensor, 
-            - 'momentum_buffer' для SGDM/Muon
-            - 'exp_avg' для Adam-like оптимизаторов
-
-    Если state для параметра ещё не создан, вместо него добавляются нули той
-    же длины.
-    """
     parts: list[torch.Tensor] = []
     found = 0
 
@@ -83,21 +64,11 @@ def flatten_optimizer_state(params: Sequence[torch.nn.Parameter], optimizer: tor
 
 
 class GlobalMomentumSVDProjector(BaseProjector):
-    """
-    Проецирует обновление на матрицу глобального моментума.
-
-    Выбранные optimizer state tensors решейпятся в матрицу через _auto_matrix_shape,
-    затем для них ищется усеченное SVD разложение U S V^T. 
-    
-    Матрица обновления Z проецируется на подпространство в зависимости от projection_type:
-    - "two_sided": UU^T Z VV^T - пересечение левого и правого сингулярных подпространств
-    - "tangent": UU^T Z + Z VV^T - UU^T Z VV^T - касательное пространство к матрицам ранга
-    """
 
     def __init__(self, params: Iterable[torch.nn.Parameter], k: int, *, matrix_shape: MatrixShape = "auto", state_key: str = "momentum_buffer",
                  projection_type: MomentumProjectionType = "two_sided", include_bias: bool = False, device: torch.device | str | None = None,
                  dtype: torch.dtype | None = None) -> None:
-        
+
         self.all_params = list(params)
         self.trainable_indices = [
             i for i, p in enumerate(self.all_params)
@@ -187,9 +158,6 @@ class GlobalMomentumSVDProjector(BaseProjector):
         return matrix.reshape(-1)[: self.n_params]
 
     def update_basis(self, optimizer: torch.optim.Optimizer) -> tuple[torch.Tensor, tuple[torch.Tensor, torch.Tensor]] | None:
-        """
-        Обновляет projector basis через optimizer state
-        """
         flat_state, found = flatten_optimizer_state(
             self.params,
             optimizer,
@@ -217,10 +185,6 @@ class GlobalMomentumSVDProjector(BaseProjector):
         return self.eigvals, (self.U, self.V)
 
     def project_flat(self, flat_update: torch.Tensor, mode: ProjectionMode) -> torch.Tensor:
-        """
-        Проекция на dom/bulk выбранного подпространства
-        В случае none возвращает update без изменений
-        """
         if mode == "none":
             return flat_update
         if not self.is_ready:
@@ -242,9 +206,6 @@ class GlobalMomentumSVDProjector(BaseProjector):
         return self._flat_from_matrix(out)
 
     def _project_matrix(self, Z: torch.Tensor) -> torch.Tensor:
-        """
-        Применяет dom-проекцию к матрице
-        """
         if self.U is None or self.V is None:
             raise RuntimeError("Momentum SVD basis is empty.")
 
@@ -310,22 +271,6 @@ class GlobalMomentumSVDProjector(BaseProjector):
 
 
 class LayerwiseMomentumSVDProjector(BaseProjector):
-    """
-    Послойный SVD-проектор на подпространства momentum оптимизатора.
-
-    Каждый слой обрабатывается независимо. Параметры с ndim >= 2
-    интерпретируются как матрицы: 
-    - Linear.weight используется в своей естественной форме [out_features, in_features], 
-    - Тензоры большего ранга (Conv2d.weight и т.д.) разворачиваются в матрицу [shape[0], -1]. 
-    - Bias и другие 1D-параметры проходят через project_update без изменений во всех режимах
-
-    update_basis считает SVD momentum-матрицы каждого слоя и берет k левых и правых сингулярных
-    направлений. rank_mode задаёт выбираемое k следующим образом:
-    - 'fixed': min(k, min(a, b)), где (a, b) - shape матрицы весов слоя
-    - 'fraction': floor(rank_frac * min(a, b)) - фиксированный процент направлений
-    - 'energy': k выбирается по накопленной энергии (сумма квадратов) сингулярных чисел, т.е
-                top_k_energy / total_energy >= rank_frac. max_rank вводит верхнюю границу на такой ранг.
-    """
 
     def __init__(
             self,
@@ -444,9 +389,6 @@ class LayerwiseMomentumSVDProjector(BaseProjector):
         return max(1, rank)
 
     def update_basis(self, optimizer: torch.optim.Optimizer) -> tuple[torch.Tensor, dict[int, _LayerwiseSVDBasis]] | None:
-        """
-        Обновляет projector basis через optimizer state
-        """
         bases: dict[int, _LayerwiseSVDBasis] = {}
         singular_chunks: list[torch.Tensor] = []
 
@@ -616,7 +558,6 @@ class LayerwiseMomentumSVDProjector(BaseProjector):
 
 
 def update_momentum_matrix_projector(projector: Any, ctx: Any) -> None:
-    """Runner ProjectorSpec.update_fn for GlobalMomentumSVDProjector."""
     if ctx.optimizer is None:
         raise RuntimeError("ProjectorContext.optimizer is None; cannot read momentum state.")
     projector.update_basis(ctx.optimizer)

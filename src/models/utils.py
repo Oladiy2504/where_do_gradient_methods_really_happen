@@ -20,7 +20,7 @@ def seed_everything(seed: int = 42) -> None:
 
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
-    # cuBLAS requires a workspace config for deterministic GEMMs.
+
     os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     torch.use_deterministic_algorithms(True, warn_only=True)
 
@@ -33,9 +33,8 @@ def cycle(loader):
 
 def categorical_mse_loss(logits: torch.Tensor, y: torch.Tensor, num_classes: int) -> torch.Tensor:
     y_onehot = F.one_hot(y, num_classes=num_classes).float()
-    # Sum over class dim, mean over batch (Hui & Belkin / Cohen et al.).
-    return F.mse_loss(logits, y_onehot, reduction="sum") / y.shape[0]
 
+    return F.mse_loss(logits, y_onehot, reduction="sum") / y.shape[0]
 
 @torch.no_grad()
 def accuracy(logits: torch.Tensor, y: torch.Tensor) -> float:
